@@ -260,6 +260,14 @@ main { position: relative; z-index: 1; }
 
 /* ---------- desktop ---------- */
 
+/* Phones: the hero text needs a solid backdrop, clear of the gateway's pillars. */
+@media (max-width: 899px) {
+  .chapter--hero .sticky::before {
+    height: 58%;
+    background: linear-gradient(to bottom, rgba(251, 247, 241, 0), rgba(251, 247, 241, .94) 22%, rgba(251, 247, 241, .98));
+  }
+}
+
 @media (min-width: 900px) {
   :root { --gutter: 40px; --top-h: 72px; }
   .nav { display: flex; }

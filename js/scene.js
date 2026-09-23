@@ -1060,6 +1060,29 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     function shadowsOff() { if (!allowShadows) return false; allowShadows = false; renderer.shadowMap.autoUpdate = false; return true; },
   ];
   if (debug) window.__scene = { renderer, scene, camera, sun, bloom, composer };
+  const steps = [];
+  let lastMedian = 0;
+  let overlay = null;
+  if (debug) {
+    overlay = document.createElement('pre');
+    overlay.style.cssText = 'position:fixed;left:6px;top:70px;z-index:100;margin:0;padding:6px 8px;'
+      + 'font:11px/1.35 ui-monospace,monospace;color:#fff;background:rgba(0,0,0,.72);pointer-events:none;max-width:92vw;white-space:pre-wrap';
+    document.body.appendChild(overlay);
+  }
+  const gl = renderer.getContext();
+  const gpuExt = gl.getExtension('WEBGL_debug_renderer_info');
+  const gpu = gpuExt ? gl.getParameter(gpuExt.UNMASKED_RENDERER_WEBGL) : 'unknown';
+  function updateOverlay() {
+    if (!overlay) return;
+    overlay.textContent = [
+      `tier ${quality}  webgl${isWebGL2 ? 2 : 1}  msaa ${rt.samples}`,
+      `gpu ${gpu}`,
+      `screen dpr ${window.devicePixelRatio}  render dpr ${renderer.getPixelRatio().toFixed(2)}`,
+      `bloom ${bloom.enabled ? 'on' : 'off'}  shadows ${allowShadows ? sun.shadow.mapSize.x : 'off'}`,
+      `frame ${lastMedian ? lastMedian.toFixed(1) + ' ms' : 'measuring'}`,
+      `steps ${steps.length ? steps.join(', ') : 'none'}`,
+    ].join('\n');
+  }
   // Judge only after start-up (shader compiles, texture uploads) has settled,
   // and only step down after two slow windows in a row.
   let frameTimes = [];
@@ -1072,12 +1095,14 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     const sorted = [...frameTimes].sort((x, y) => x - y);
     frameTimes = [];
     slowWindows = sorted[30] >= 0.028 ? slowWindows + 1 : 0;
-    if (debug) console.info(`[scene] median frame ${(sorted[30] * 1000).toFixed(1)} ms`);
+    lastMedian = sorted[30] * 1000;
+    if (debug) console.info(`[scene] median frame ${lastMedian.toFixed(1)} ms`);
+    updateOverlay();
     if (slowWindows < 2) return;
     slowWindows = 0;
     while (ladder.length) {
       const step = ladder.shift();
-      if (step()) { if (debug) console.info('[scene] quality step down:', step.name || 'step'); break; }
+      if (step()) { steps.push(step.name); if (debug) console.info('[scene] quality step down:', step.name); updateOverlay(); break; }
     }
   }
 
@@ -1148,6 +1173,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
   renderer.compile(scene, camera);
   renderer.shadowMap.needsUpdate = true;
   render();
+  updateOverlay();
   reducedMotion.addEventListener?.('change', () => { needsRender = true; });
   requestAnimationFrame(frame);
 
