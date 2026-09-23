@@ -79,8 +79,8 @@ export const MOODS = [
     skyElev: -14, skyAzim: 60, turbidity: 2, rayleigh: 0.6, mie: 0.004, mieG: 0.8,
     lightElev: 38, lightAzim: 120, sunColor: '#9fb4dc', sunIntensity: 0.18,
     hemiSky: '#3a2c2a', hemiGround: '#120c08', hemiIntensity: 0.22,
-    fog: '#150e0a', fogNear: 25, fogFar: 160, exposure: 0.95, env: 'night', envIntensity: 0.9,
-    bloom: 0.95, lamps: 1, windows: 1, stars: 0.8, festive: 1,
+    fog: '#150e0a', fogNear: 25, fogFar: 160, exposure: 1.12, env: 'night', envIntensity: 0.45,
+    bloom: 0.7, lamps: 1, windows: 1, stars: 0.8, festive: 1,
   },
   { // 5 — visit, the whole place lit at night
     skyElev: -14, skyAzim: 60, turbidity: 2, rayleigh: 0.6, mie: 0.004, mieG: 0.8,

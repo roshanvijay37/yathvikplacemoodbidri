@@ -376,7 +376,9 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
   const svgText = await (await fetch(MARK_URL)).text();
 
   const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, low ? 1.5 : 2));
+  // Sharp-screen phones start at 2x; the quality ladder lowers it if frames are slow.
+  const screenDpr = window.devicePixelRatio || 1;
+  renderer.setPixelRatio(Math.min(screenDpr, low ? (screenDpr >= 2.5 ? 2 : 1.5) : 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -833,7 +835,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     }));
     festive.frustumCulled = false;
     scene.add(festive);
-    hallLight.position.set(cx, 5.5, cz);
+    hallLight.position.set(cx, 8.3, cz); // at the chandelier: lower, it glares off the nearest arches
     scene.add(hallLight);
   }
 
@@ -969,7 +971,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     poolMats[G_HALL].opacity = 0.18 * H;
     poolMats[G_PATH].opacity = 0.45 * L;
     barLight.intensity = 30 * L;
-    hallLight.intensity = 45 * Math.max(F, L * 0.4);
+    hallLight.intensity = 34 * Math.max(F, L * 0.4);
     gateLight.intensity = 25 * L;
     stripMat.emissiveIntensity = 3.2 * L;
     festive.material.uniforms.uAmount.value = F;
@@ -1048,7 +1050,12 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
   // If frames are slow, give up effects one at a time, cheapest loss first.
   const debug = new URLSearchParams(location.search).has('debug');
   const ladder = [
-    function pixelRatio125() { if (renderer.getPixelRatio() <= 1.26) return false; renderer.setPixelRatio(1.25); resize(); return true; },
+    function pixelRatioDown() {
+      const r = renderer.getPixelRatio();
+      const next = [1.5, 1.25].find((v) => v < r - 0.01);
+      if (!next) return false;
+      renderer.setPixelRatio(next); resize(); return true;
+    },
     function shadowMap1024() {
       if (sun.shadow.mapSize.x <= 1024) return false;
       sun.shadow.mapSize.set(1024, 1024);
@@ -1102,7 +1109,13 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     slowWindows = 0;
     while (ladder.length) {
       const step = ladder.shift();
-      if (step()) { steps.push(step.name); if (debug) console.info('[scene] quality step down:', step.name); updateOverlay(); break; }
+      if (step()) {
+        steps.push(step.name);
+        if (step.name === 'pixelRatioDown' && renderer.getPixelRatio() > 1.26) ladder.unshift(step);
+        if (debug) console.info('[scene] quality step down:', step.name);
+        updateOverlay();
+        break;
+      }
     }
   }
 
