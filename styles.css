@@ -260,11 +260,16 @@ main { position: relative; z-index: 1; }
 
 /* ---------- desktop ---------- */
 
-/* Phones: the hero text needs a solid backdrop, clear of the gateway's pillars. */
+/* Phones: the backdrop is attached to the hero text itself, so the text sits
+   on cream at any screen height (browser bars make the visible area vary). */
 @media (max-width: 899px) {
-  .chapter--hero .sticky::before {
-    height: 58%;
-    background: linear-gradient(to bottom, rgba(251, 247, 241, 0), rgba(251, 247, 241, .94) 22%, rgba(251, 247, 241, .98));
+  .chapter--hero .sticky::before { display: none; }
+  .chapter--hero .sticky { overflow: hidden; overflow: clip; }
+  .hero-copy { isolation: isolate; }
+  .hero-copy::before {
+    content: ''; position: absolute; z-index: -1;
+    left: 50%; width: 100vw; transform: translateX(-50%); top: -72px; bottom: -40vh;
+    background: linear-gradient(to bottom, rgba(251, 247, 241, 0), rgba(251, 247, 241, .95) 64px, rgba(251, 247, 241, .98));
   }
 }
 
