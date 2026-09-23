@@ -36,49 +36,57 @@ export const CAMERA_KEYS = [
   { p: 5,    pos: [-34, 46, -24],      look: [0, 0, -66] },
 ];
 
-// Colours are hex strings; numbers are interpolated linearly between chapters.
-// sun.elev / sun.azim are degrees.
+// Lighting per chapter, interpolated while scrolling. Colours are hex strings.
+//
+// sky*   — the physically based sky (three/addons Sky): sun elevation/azimuth in
+//          degrees (azimuth 0 = +z, towards the arrival camera; 180 = behind
+//          the gateway), turbidity (haze), rayleigh (blue scattering), mie.
+// light* — direction of the directional light that casts shadows. By day it
+//          is the sun; at night it stands in for moonlight.
+// env    — which pre-computed reflection environment to use (see scene.js):
+//          'dawn' | 'day' | 'dusk' | 'night'. Switches halfway between chapters.
+// bloom  — glow strength around bright lights. exposure — overall brightness.
 export const MOODS = [
-  { // 0 — arrival, dawn
-    skyTop: '#b8c1cc', skyHorizon: '#f5dcc2', skyBottom: '#e9d8c4',
-    sunColor: '#ffd3a3', sunIntensity: 2.4, sunElev: 9, sunAzim: 35,
-    hemiSky: '#f4e7d7', hemiGround: '#8a6a4a', hemiIntensity: 0.9,
-    fog: '#f1dcc5', fogNear: 30, fogFar: 180, exposure: 1.0, env: 1.0,
-    lamps: 0.1, windows: 0, stars: 0, festive: 0,
+  { // 0 — arrival, early morning: low sun from the front-left, warm on the bronze
+    skyElev: 6, skyAzim: 35, turbidity: 6, rayleigh: 2.4, mie: 0.006, mieG: 0.86,
+    lightElev: 8, lightAzim: 35, sunColor: '#ffc690', sunIntensity: 3,
+    hemiSky: '#f3dcc4', hemiGround: '#5c4533', hemiIntensity: 0.45,
+    fog: '#e7c7a6', fogNear: 70, fogFar: 380, exposure: 0.62, env: 'dawn', envIntensity: 1.0,
+    bloom: 0.22, lamps: 0.2, windows: 0.05, stars: 0, festive: 0,
   },
-  { // 1 — restaurant, bright day
-    skyTop: '#9db6cc', skyHorizon: '#f4ece1', skyBottom: '#ebe2d6',
-    sunColor: '#fff3e0', sunIntensity: 3.0, sunElev: 52, sunAzim: 20,
-    hemiSky: '#f6efe6', hemiGround: '#9a7a58', hemiIntensity: 1.1,
-    fog: '#efe7dc', fogNear: 40, fogFar: 220, exposure: 1.0, env: 1.0,
-    lamps: 0, windows: 0, stars: 0, festive: 0,
+  { // 1 — restaurant, bright midday
+    skyElev: 58, skyAzim: 35, turbidity: 3, rayleigh: 1.1, mie: 0.004, mieG: 0.8,
+    lightElev: 58, lightAzim: 35, sunColor: '#fff4e4', sunIntensity: 4.6,
+    hemiSky: '#dfe8f2', hemiGround: '#8a7560', hemiIntensity: 0.35,
+    fog: '#cfdbe6', fogNear: 90, fogFar: 460, exposure: 0.5, env: 'day', envIntensity: 0.65,
+    bloom: 0.1, lamps: 0, windows: 0, stars: 0, festive: 0,
   },
-  { // 2 — stay, golden hour into dusk
-    skyTop: '#565a78', skyHorizon: '#f0a466', skyBottom: '#c98b5c',
-    sunColor: '#ff9d52', sunIntensity: 2.3, sunElev: 5, sunAzim: -60,
-    hemiSky: '#e9b07c', hemiGround: '#3b2a1c', hemiIntensity: 0.6,
-    fog: '#d8976a', fogNear: 25, fogFar: 170, exposure: 1.05, env: 0.7,
-    lamps: 0.45, windows: 0.5, stars: 0.1, festive: 0,
+  { // 2 — stay, golden hour into blue hour
+    skyElev: 1.2, skyAzim: -100, turbidity: 8, rayleigh: 3, mie: 0.008, mieG: 0.9,
+    lightElev: 6, lightAzim: -100, sunColor: '#ff9a52', sunIntensity: 2.8,
+    hemiSky: '#8d8fb5', hemiGround: '#3a2a1e', hemiIntensity: 0.3,
+    fog: '#b7948a', fogNear: 60, fogFar: 330, exposure: 0.72, env: 'dusk', envIntensity: 0.85,
+    bloom: 0.35, lamps: 0.55, windows: 0.5, stars: 0.05, festive: 0,
   },
   { // 3 — bar, night
-    skyTop: '#07060a', skyHorizon: '#2a1c12', skyBottom: '#120d09',
-    sunColor: '#9fb2d6', sunIntensity: 0.35, sunElev: 40, sunAzim: 120,
-    hemiSky: '#3a3040', hemiGround: '#16110c', hemiIntensity: 0.2,
-    fog: '#16110c', fogNear: 12, fogFar: 95, exposure: 1.1, env: 0.1,
-    lamps: 1, windows: 1, stars: 1, festive: 0,
+    skyElev: -14, skyAzim: 60, turbidity: 2, rayleigh: 0.6, mie: 0.004, mieG: 0.8,
+    lightElev: 38, lightAzim: 120, sunColor: '#9fb4dc', sunIntensity: 0.22,
+    hemiSky: '#2b3550', hemiGround: '#120c08', hemiIntensity: 0.1,
+    fog: '#0e0b0b', fogNear: 25, fogFar: 150, exposure: 0.95, env: 'night', envIntensity: 0.5,
+    bloom: 0.75, lamps: 1, windows: 1, stars: 1, festive: 0,
   },
   { // 4 — hall, lit for an event
-    skyTop: '#120b08', skyHorizon: '#4a2a14', skyBottom: '#1a120b',
-    sunColor: '#9fb2d6', sunIntensity: 0.3, sunElev: 40, sunAzim: 120,
-    hemiSky: '#5a3a20', hemiGround: '#16110c', hemiIntensity: 0.28,
-    fog: '#1d130b', fogNear: 14, fogFar: 105, exposure: 1.15, env: 0.12,
-    lamps: 1, windows: 1, stars: 0.8, festive: 1,
+    skyElev: -14, skyAzim: 60, turbidity: 2, rayleigh: 0.6, mie: 0.004, mieG: 0.8,
+    lightElev: 38, lightAzim: 120, sunColor: '#9fb4dc', sunIntensity: 0.18,
+    hemiSky: '#3a2c2a', hemiGround: '#120c08', hemiIntensity: 0.22,
+    fog: '#150e0a', fogNear: 25, fogFar: 160, exposure: 0.95, env: 'night', envIntensity: 0.9,
+    bloom: 0.95, lamps: 1, windows: 1, stars: 0.8, festive: 1,
   },
   { // 5 — visit, the whole place lit at night
-    skyTop: '#0a0808', skyHorizon: '#2d1d11', skyBottom: '#16110c',
-    sunColor: '#9fb2d6', sunIntensity: 0.18, sunElev: 45, sunAzim: 120,
-    hemiSky: '#4a3424', hemiGround: '#16110c', hemiIntensity: 0.16,
-    fog: '#16110c', fogNear: 60, fogFar: 260, exposure: 1.15, env: 0.1,
-    lamps: 1, windows: 1, stars: 1, festive: 0.6,
+    skyElev: -14, skyAzim: 60, turbidity: 2, rayleigh: 0.6, mie: 0.004, mieG: 0.8,
+    lightElev: 42, lightAzim: 120, sunColor: '#a9bde3', sunIntensity: 0.45,
+    hemiSky: '#34405e', hemiGround: '#1a120c', hemiIntensity: 0.3,
+    fog: '#0e0b0b', fogNear: 80, fogFar: 380, exposure: 1.35, env: 'night', envIntensity: 0.8,
+    bloom: 0.7, lamps: 1, windows: 1, stars: 1, festive: 0.6,
   },
 ];
