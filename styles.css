@@ -178,7 +178,7 @@ main { position: relative; z-index: 1; }
 .hero-copy { position: relative; pointer-events: auto; text-align: center; max-width: 640px; color: var(--ink); }
 .hero-copy .kicker { justify-content: center; }
 .hero-copy h1 { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 16px; }
-.hero-copy h1 .w1 { font: 600 clamp(52px, 15vw, 118px)/.9 var(--serif); letter-spacing: .06em; text-transform: uppercase; color: var(--bronze-deep); }
+.hero-copy h1 .w1 { font: 600 clamp(40px, min(15vw, 13vh), 118px)/.9 var(--serif); letter-spacing: .06em; text-transform: uppercase; color: var(--bronze-deep); }
 .hero-copy h1 .w2 { font: 500 clamp(14px, 3.4vw, 22px)/1 var(--sans); letter-spacing: .6em; margin-right: -.6em; text-transform: uppercase; color: var(--bronze-deep); }
 .hero-copy .lede { font-size: 17px; color: var(--ink); max-width: 30em; margin: 0 auto; }
 .cue { display: inline-flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 22px; font: 500 11px/1 var(--sans); letter-spacing: .24em; text-transform: uppercase; color: var(--muted); }
@@ -222,17 +222,25 @@ main { position: relative; z-index: 1; }
 .noscript { position: relative; z-index: 1; background: var(--cream); padding: 100px 20px; text-align: center; }
 .noscript h1 { font: 600 40px/1.1 var(--serif); margin-bottom: 12px; }
 
-/* Short or narrow screens: panels never get cut off. */
-.panel { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+/* Panels are never their own scroll areas: a swipe that starts on a panel
+   must always scroll the page. On phones the visit panel (with its map) is
+   too tall to pin, so it flows with the page. */
 @media (max-width: 899px) {
   .chapter--visit { height: auto; }
   .chapter--visit .sticky { position: relative; height: auto; min-height: 100vh; min-height: 100svh; }
-  .panel--visit { max-height: none; overflow: visible; }
 }
-@media (max-height: 640px) {
+@media (max-height: 700px) {
   .panel { padding: 18px 18px 16px; }
   .panel h2 { font-size: 30px; margin-bottom: 10px; }
-  .panel .body { font-size: 15px; }
+  .panel .body { font-size: 15px; line-height: 1.5; }
+  .panel .actions { margin-top: 14px; }
+}
+/* Very short screens (small phones, phones held sideways): too little room to
+   pin a panel, so chapters flow like a normal page over the scene. */
+@media (max-height: 560px) {
+  .sticky { position: relative; height: auto; min-height: 100vh; min-height: 100svh; }
+  .chapter--hero .sticky { position: sticky; height: 100vh; height: 100svh; align-items: center; }
+  .chapter--hero .sticky::before { height: 100%; background: rgba(251, 247, 241, .82); }
 }
 
 /* ---------- desktop ---------- */
