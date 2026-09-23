@@ -1,7 +1,7 @@
 # Yathvik Place, Moodbidri — project notes
 
 Everything known about the business, brand, domain and hosting, in one place.
-No site has been built yet; the live domain shows a holding page.
+The site built from it is described under "Current state".
 
 ## The business
 
@@ -148,20 +148,39 @@ These are GitHub Pages' published addresses. The original parking record
   `main` publishes
 - **Custom domain:** set by the `CNAME` file in this repo; `.nojekyll` disables
   Jekyll processing
-- **HTTPS:** GitHub issues the certificate automatically. As of 23 Sep 2026
-  it was still pending; once it exists, turn on "Enforce HTTPS" in repo
-  Settings → Pages
+- **HTTPS:** on and enforced. Certificate covers the apex and `www`, issued
+  23 Sep 2026, expires 22 Dec 2026 — GitHub renews it automatically. (It only
+  issued after the custom domain was cleared and set again.) `http://`
+  redirects to `https://`.
 
 Because the repo is public, everything in it — this file included — is
 publicly readable.
 
 ## Current state
 
-- Live: holding page, "Yathvik Place, Moodbidri — coming soon"
-- Brand assets: saved in `brand/`
-- Website: **not started** — waiting for the go-ahead
+**v1 website — built 23 Sep 2026.** A scroll-driven 3D site (Three.js r170, no
+build step). Scrolling walks the camera through one continuous scene built
+from the logo mark, from dawn to night:
+
+| Chapter | Time of day | Scene |
+|---|---|---|
+| Arrival | Dawn | The mark as a 16 m bronze gateway; the camera passes through a gap between its pillars |
+| 01 Restaurant | Midday | Tables under a bronze pergola, beside a colonnade of smaller marks |
+| 02 Stay rooms | Dusk | A building whose windows light up one by one |
+| 03 Bar | Night | Counter, back bar and pendant lamps under a canopy |
+| 04 Hall | Event night | A rotunda of eight marks, a chandelier ring and rising lights |
+| Visit | Night | Overhead view of the whole place; address, both numbers, directions, map |
+
+- All copy uses only the facts above. Where details are missing the page says
+  so and offers a call (e.g. "Call us to book a table or ask about the menu").
+- No photos yet. Each section has a slot in `images/` and an empty `images`
+  list in `content.js`; see `README.md` for how to add them.
+- Checked in desktop Chrome at 390×844 (phone emulation) and 1440×900, with
+  WebGL disabled (CSS fallback) and with reduced motion. **Not yet tested on a
+  real phone** — performance on low-end Android handsets is unverified.
+- Brand assets: `brand/`. Social preview: `images/og/og.jpg`.
 
 ## Editing the site
 
-Change files in the repo root (`index.html` etc.), commit, push to `main`.
-The live site updates within a minute or two.
+See `README.md`. In short: text and photos are in `content.js`; push to
+`main` and the live site updates within a minute or two.
