@@ -44,7 +44,10 @@ function quality() {
 }
 
 async function start3D() {
-  if (!hasWebGL()) return;
+  if (!hasWebGL()) {
+    if (new URLSearchParams(location.search).has('debug')) console.warn('WebGL unavailable');
+    return;
+  }
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   try {
     const { createScene } = await import('./scene.js');
@@ -58,6 +61,12 @@ async function start3D() {
   } catch (err) {
     // The CSS fallback stays in place; the page works without the scene.
     console.warn('3D scene unavailable:', err);
+    if (new URLSearchParams(location.search).has('debug')) {
+      const box = document.createElement('pre');
+      box.style.cssText = 'position:fixed;left:6px;top:70px;z-index:100;margin:0;padding:6px 8px;font:11px/1.35 monospace;color:#fff;background:rgba(120,0,0,.85);max-width:92vw;white-space:pre-wrap';
+      box.textContent = `3D failed: ${err && (err.stack || err.message || err)}`;
+      document.body.appendChild(box);
+    }
   }
 }
 
