@@ -21,6 +21,7 @@ and hosting. Read it before changing anything on the site.
 | `js/ui.js` | Markup builders (used by the build and the browser); scroll tracking |
 | `js/scene.js` | The 3D world (Three.js). Knows nothing about the text |
 | `js/chapters.js` | Camera stops, time-of-day moods and the scene layout per chapter |
+| `textures/` | CC0 PBR textures for the 3D scene, desktop (`1k`) and phone (`512`) sizes |
 | `brand/` | Logo files — `mark.svg` is also the source of the 3D gateway and the favicon |
 | `images/<slot>/` | Photos for each section: `restaurant`, `rooms`, `bar`, `hall` |
 | `images/og/` | Social-sharing preview (`og.jpg`) and icons |
@@ -85,12 +86,22 @@ Photos appear as a swipeable strip inside the chapter's panel, on top of the
 
 ## The 3D scene
 
-- Everything is generated in code; the only asset is `brand/mark.svg`, which
-  is extruded into the bronze gateway, the colonnade and the hall's rotunda.
+- Generated in code, with one geometry asset: `brand/mark.svg`, extruded into
+  the bronze gateway, the colonnade and the hall's rotunda. Palms, furniture,
+  lamps and the building are also procedural.
+- Realism: a physically based sky (Three.js `Sky`) whose light is pre-computed
+  into reflection maps for dawn, day, dusk and night; CC0 PBR textures from
+  Poly Haven in `textures/` (marble, plaster, cherry wood — credits in
+  `textures/README.md`); soft sun shadows; HDR glow on lamps; ACES tone
+  mapping; light film grain and vignette.
+- Each chapter pays only for what it shows: glow is off in daylight, and the
+  shadow map stops updating at night when the moonlight is too faint to matter.
 - Three.js r170 is loaded from jsDelivr through the import map in
-  `index.html`. It is only downloaded if the device supports WebGL.
-- Phones get a lower pixel ratio (max 1.5), fewer curve segments and fewer
-  particles. If the first frames are slow, the scene drops to 1× pixel ratio.
+  `index.html`, only if the device supports WebGL.
+- Phones get 512 px textures (marble stays 1k), a 1024 shadow map, pixel ratio
+  up to 1.5 and fewer palms and particles. If frames stay slow after start-up,
+  quality steps down in this order: pixel ratio, shadow-map size, glow, pixel
+  ratio 1, shadows. Add `?debug` to the URL to log frame times and each step.
 - Without WebGL, a CSS gradient with the bronze mark stands in, changing colour
   per chapter. With "reduce motion" switched on, the camera cuts between
   chapters instead of gliding, and nothing drifts.

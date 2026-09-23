@@ -180,6 +180,20 @@ from the logo mark, from dawn to night:
   real phone** — performance on low-end Android handsets is unverified.
 - Brand assets: `brand/`. Social preview: `images/og/og.jpg`.
 
+### Realism upgrade (23 Sep 2026)
+
+The scene was moved from a stylised look towards photoreal rendering: a
+physically based sky with matching reflections per time of day, CC0 PBR
+textures (Poly Haven marble, plaster, cherry wood), soft sun shadows, HDR glow
+on lamps, film grain; a marble plaza with lawn and coconut palms around it;
+chairs, turned lamps and stools, glazed windows with lit rooms. It is still a
+3D render of an invented layout, not the real building — real photos or
+footage remain the only way to show the actual place.
+
+Checked in desktop Chrome (1440×900, Intel Iris Xe) and 390×844 phone
+emulation: all effects hold full frame rate on that laptop once start-up has
+settled. **Not yet tested on a real phone.**
+
 ### SEO (23 Sep 2026)
 
 - All text, links and structured data are written into the HTML by
