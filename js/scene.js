@@ -474,7 +474,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
   };
   flat(scaleUV(new THREE.PlaneGeometry(plazaW, plazaL), plazaW / 1.5, plazaL / 1.5), marble, 0, (PLAZA.zNear + PLAZA.zFar) / 2);
   flat(scaleUV(new THREE.PlaneGeometry(7, 60), 7 / 1.5, 60 / 1.5), marble, 0, PLAZA.zNear + 30).position.y = 0.002;
-  const lawnMat = new THREE.MeshStandardMaterial({ map: grassTexture(), color: '#ffffff', roughness: 1, metalness: 0 });
+  const lawnMat = new THREE.MeshStandardMaterial({ map: grassTexture(), color: '#a39e86', roughness: 1, metalness: 0 });
   flat(scaleUV(new THREE.PlaneGeometry(1400, 1400), 1400 / 4, 1400 / 4), lawnMat, 0, -60).position.y = -0.01;
   scene.add(cast(new THREE.Mesh(mergeGeometries([
     box(plazaW + 0.6, 0.12, 0.3, 0, 0.06, PLAZA.zFar, 1.5),
