@@ -15,11 +15,11 @@ function photos(images) {
 
 function heroSection(c) {
   return `
-  <section class="chapter chapter--hero is-active" id="arrival" data-stop="0" data-mood="day">
+  <section class="chapter chapter--hero" id="arrival" data-stop="0" data-mood="day">
     <div class="sticky">
       <div class="hero-copy">
         <p class="kicker">${esc(c.hero.kicker)}</p>
-        <h1><span class="w1">Yathvik</span><span class="w2">Place</span><span class="sr">, Moodbidri</span></h1>
+        <h1><span class="w1">Yathvik</span> <span class="w2">Place</span><span class="sr">, Moodbidri</span></h1>
         <p class="lede">${esc(c.hero.lede)}</p>
         <p class="cue">${esc(c.hero.cue)}</p>
       </div>
@@ -39,7 +39,7 @@ function chapterSection(ch, i, c) {
         ${photos(ch.images)}
         <p class="note">${esc(ch.note)}</p>
         <div class="actions">
-          <a class="btn" href="tel:${esc(phone.tel)}">${ICON_PHONE}${esc(ch.action)}</a>
+          <a class="btn" href="tel:${esc(phone.tel)}" data-track="call" data-where="${esc(ch.id)}">${ICON_PHONE}${esc(ch.action)}</a>
         </div>
       </article>
     </div>
@@ -56,11 +56,11 @@ function visitSection(c, stop) {
         <h2 id="visit-title">${esc(v.title)}</h2>
         <address>${esc(c.name)}<br>${c.address.lines.map(esc).join('<br>')}</address>
         <ul class="phones">
-          ${c.phones.map((p) => `<li><a href="tel:${esc(p.tel)}" aria-label="${esc(v.callLabel)} ${esc(p.display)}">${esc(p.display)}</a></li>`).join('')}
+          ${c.phones.map((p) => `<li><a href="tel:${esc(p.tel)}" aria-label="${esc(v.callLabel)} ${esc(p.display)}" data-track="call" data-where="visit">${esc(p.display)}</a></li>`).join('')}
         </ul>
         <div class="actions">
-          <a class="btn" href="${esc(c.maps.link)}" target="_blank" rel="noopener">${ICON_PIN}${esc(v.directions)}</a>
-          <a class="btn btn-outline" href="tel:${esc(c.phones[0].tel)}">${ICON_PHONE}${esc(v.callLabel)}</a>
+          <a class="btn" href="${esc(c.maps.link)}" target="_blank" rel="noopener" data-track="directions" data-where="visit">${ICON_PIN}${esc(v.directions)}</a>
+          <a class="btn btn-outline" href="tel:${esc(c.phones[0].tel)}" data-track="call" data-where="visit">${ICON_PHONE}${esc(v.callLabel)}</a>
         </div>
         <div class="map" data-src="${esc(c.maps.embed)}" data-title="Map showing ${esc(c.name)}, ${esc(c.address.oneLine)}">
           <p class="map-hint">Map loads as you scroll</p>
@@ -70,33 +70,48 @@ function visitSection(c, stop) {
   </section>`;
 }
 
+// ---- Markup builders. Pure functions of content.js, used both here in the
+// browser and by tools/build.mjs, which writes their output into index.html
+// so the text is in the page source for search engines and link previews.
+
+export function storyHTML(c) {
+  return heroSection(c) + c.chapters.map((ch, i) => chapterSection(ch, i, c)).join('') + visitSection(c, c.chapters.length + 1);
+}
+
+export function navHTML(c) {
+  return [...c.chapters.map((ch) => ({ id: ch.id, label: ch.nav })), { id: 'visit', label: c.visit.nav }]
+    .map((l) => `<a href="#${esc(l.id)}" data-target="${esc(l.id)}">${esc(l.label)}</a>`).join('');
+}
+
+export function headerActionsHTML(c) {
+  return `<a class="btn top-directions" href="${esc(c.maps.link)}" target="_blank" rel="noopener" data-track="directions" data-where="header">Directions</a>`
+    + `<a class="btn top-call" href="tel:${esc(c.phones[0].tel)}" data-track="call" data-where="header">${esc(c.visit.callLabel)}</a>`;
+}
+
+export function callbarHTML(c) {
+  return `<a class="btn" href="tel:${esc(c.phones[0].tel)}" data-track="call" data-where="callbar">${ICON_PHONE}${esc(c.visit.callLabel)}</a>`
+    + `<a class="btn btn-outline" href="${esc(c.maps.link)}" target="_blank" rel="noopener" data-track="directions" data-where="callbar">${ICON_PIN}Directions</a>`;
+}
+
+export function footerHTML(c) {
+  return `<img src="brand/logo-white.svg" alt="${esc(c.name)}" width="150" height="130">`
+    + `<p>${esc(c.footer.note)}</p>`
+    + `<p>${esc(c.address.oneLine)}</p>`
+    + `<p>${c.phones.map((p) => `<a href="tel:${esc(p.tel)}" data-track="call" data-where="footer">${esc(p.display)}</a>`).join(' · ')}</p>`
+    + `<p>© ${esc(c.footer.year)} ${esc(c.name)}</p>`;
+}
+
+// ---- Browser: fill anything the build did not, then wire up behaviour.
+
 export function renderPage(c) {
   const main = document.getElementById('story');
-  const stopsCount = c.chapters.length + 1;
-  main.insertAdjacentHTML('beforeend',
-    heroSection(c) + c.chapters.map((ch, i) => chapterSection(ch, i, c)).join('') + visitSection(c, stopsCount));
-
-  // Header navigation
+  const fill = (el, html) => { if (el && !el.children.length) el.innerHTML = html; };
+  if (!main.querySelector('[data-stop]')) main.insertAdjacentHTML('beforeend', storyHTML(c));
   const nav = document.getElementById('nav');
-  nav.innerHTML = [...c.chapters.map((ch) => ({ id: ch.id, label: ch.nav })), { id: 'visit', label: c.visit.nav }]
-    .map((l) => `<a href="#${esc(l.id)}" data-target="${esc(l.id)}">${esc(l.label)}</a>`).join('');
-  const topCall = document.getElementById('top-call');
-  topCall.href = `tel:${c.phones[0].tel}`;
-  topCall.insertAdjacentHTML('beforebegin',
-    `<a class="btn top-directions" href="${esc(c.maps.link)}" target="_blank" rel="noopener">Directions</a>`);
-
-  // Mobile call bar
-  document.getElementById('callbar').innerHTML = `
-    <a class="btn" href="tel:${esc(c.phones[0].tel)}">${ICON_PHONE}${esc(c.visit.callLabel)}</a>
-    <a class="btn btn-outline" href="${esc(c.maps.link)}" target="_blank" rel="noopener">${ICON_PIN}Directions</a>`;
-
-  // Footer
-  document.getElementById('foot').innerHTML = `
-    <img src="brand/logo-white.svg" alt="${esc(c.name)}" width="150" height="130">
-    <p>${esc(c.footer.note)}</p>
-    <p>${esc(c.address.oneLine)}</p>
-    <p>${c.phones.map((p) => `<a href="tel:${esc(p.tel)}">${esc(p.display)}</a>`).join(' · ')}</p>
-    <p>© ${new Date().getFullYear()} ${esc(c.name)}</p>`;
+  fill(nav, navHTML(c));
+  fill(document.getElementById('top-actions'), headerActionsHTML(c));
+  fill(document.getElementById('callbar'), callbarHTML(c));
+  fill(document.getElementById('foot'), footerHTML(c));
 
   const sections = [...main.querySelectorAll('[data-stop]')];
   const navLinks = [...nav.querySelectorAll('a')];

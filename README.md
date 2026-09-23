@@ -1,8 +1,9 @@
 # yathvikplacemoodbidri.com
 
 The website for Yathvik Place, Moodbidri. Plain static files served by GitHub
-Pages from the root of `main` — there is no build step. Every push to `main`
-is live within a minute or two.
+Pages from the root of `main` — nothing is built on the server. The one local
+step is `node tools/build.mjs` after editing `content.js` (see "Changing
+text"). Every push to `main` is live within a minute or two.
 
 `PROJECT.md` is the source of truth for the business details, brand, domain
 and hosting. Read it before changing anything on the site.
@@ -11,34 +12,44 @@ and hosting. Read it before changing anything on the site.
 
 | Path | What it is |
 |---|---|
-| `index.html` | Page shell: `<head>` (SEO, Open Graph, JSON-LD), header, call bar |
-| `content.js` | **All text, phone numbers, address, map links and photo lists** |
+| `content.js` | **All text, phone numbers, address, map links, search-engine text and photo lists** |
+| `tools/build.mjs` | Writes `content.js` into `index.html`, `404.html`, `sitemap.xml`, `robots.txt` |
+| `index.html` | Page template; the regions marked `build:…` are generated — do not hand-edit them |
 | `styles.css` | Layout, palette and type |
-| `js/main.js` | Start-up: builds the page, then loads the 3D scene if the device supports it |
-| `js/ui.js` | Builds the sections from `content.js`; tracks scroll position |
+| `fonts/` | Cormorant Garamond and Jost, served from this site (SIL Open Font Licence, see `fonts/OFL-*.txt`) |
+| `js/main.js` | Start-up: wires the page up, starts analytics if configured, loads the 3D scene if supported |
+| `js/ui.js` | Markup builders (used by the build and the browser); scroll tracking |
 | `js/scene.js` | The 3D world (Three.js). Knows nothing about the text |
 | `js/chapters.js` | Camera stops, time-of-day moods and the scene layout per chapter |
 | `brand/` | Logo files — `mark.svg` is also the source of the 3D gateway and the favicon |
 | `images/<slot>/` | Photos for each section: `restaurant`, `rooms`, `bar`, `hall` |
-| `images/og/` | Social-sharing preview (`og.jpg`) and home-screen icon |
+| `images/og/` | Social-sharing preview (`og.jpg`) and icons |
+| `.github/workflows/check.yml` | Fails the commit's check if `content.js` was changed without rebuilding |
 | `CNAME`, `.nojekyll` | Needed by GitHub Pages — do not delete |
 
 ## Changing text
 
-Edit `content.js` and push. Each chapter has `title`, `body`, `note` and
-`action` (the call button label). The phone numbers and address are at the top
-of the file and are used everywhere on the page.
+1. Edit `content.js`. Each chapter has `title`, `body`, `note` and `action`
+   (the call button label); phone numbers, address and the search-engine
+   title/description (`site`) are at the top.
+2. Run `node tools/build.mjs` (Node 18 or newer, no install needed).
+3. Commit `content.js` **and** the files it rewrote, then push.
 
-Search engines and link previews do not run JavaScript, so a few facts are
-also written directly into `index.html`. **If a phone number, the address or
-the business description changes, update both files** — in `index.html` that
-means the `<title>`, `description`, the `og:` tags, the JSON-LD block and the
-`<noscript>` section.
+Step 2 matters: it puts the text into the HTML itself, which is what search
+engines, WhatsApp/Facebook link previews and visitors without JavaScript see.
+If it is skipped, the "Check generated files" action on GitHub turns red.
 
 Only publish facts recorded in `PROJECT.md`. Its "not yet provided" list
 (menu, prices, hours, room details, hall capacity, email, WhatsApp, social
 links) must not appear on the site until it has been supplied and written
 there.
+
+## Analytics
+
+Off until `analytics.ga4` in `content.js` holds a Google Analytics 4
+measurement ID (`G-…`). Once set, it counts visits plus `call_click` and
+`directions_click` events, each tagged with where on the page the tap
+happened (`header`, `callbar`, `restaurant`, `visit`, …).
 
 ## Adding photos
 
@@ -56,7 +67,8 @@ there.
 
    `alt` describes the photo for screen readers; `width`/`height` are the
    file's pixel size and stop the page jumping while it loads.
-4. Push. A chapter with an empty `images` list shows no photo strip at all, so
+4. Run `node tools/build.mjs` (it also adds the photos to `sitemap.xml`),
+   then push. A chapter with an empty `images` list shows no photo strip at all, so
    sections without photos never look broken.
 
 Photos appear as a swipeable strip inside the chapter's panel, on top of the

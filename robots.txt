@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://yathvikplacemoodbidri.com/sitemap.xml

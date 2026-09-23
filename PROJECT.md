@@ -180,6 +180,31 @@ from the logo mark, from dawn to night:
   real phone** — performance on low-end Android handsets is unverified.
 - Brand assets: `brand/`. Social preview: `images/og/og.jpg`.
 
+### SEO (23 Sep 2026)
+
+- All text, links and structured data are written into the HTML by
+  `tools/build.mjs` from `content.js`, so crawlers and link previews that do not
+  run JavaScript see the whole page. A GitHub Action fails if they drift.
+- Title, description, canonical, Open Graph/Twitter cards, geo tags, and
+  schema.org JSON-LD (`LocalBusiness` + `Hotel` + `Restaurant` + `BarOrPub` +
+  `EventVenue` with address and coordinates, plus `WebSite`).
+- `sitemap.xml`, `robots.txt`, branded `404.html`, 192 px icon.
+- Fonts served from the site (no Google Fonts request).
+- Lighthouse (mobile): Accessibility 100, Best Practices 100, SEO 100.
+  Performance trace on a slow-4G / 4× CPU profile: LCP 1.0 s, CLS 0.
+- Analytics: wired for Google Analytics 4 (visits + Call/Directions taps) but
+  **off** — needs a measurement ID in `content.js`.
+
+**Waiting on Roshan:**
+1. **Google Search Console** — add a *Domain* property for
+   `yathvikplacemoodbidri.com` and send the `google-site-verification=…` TXT
+   value; it is then added at Hostinger. (Automatic verification through the
+   Play service account was tried and is blocked: that account cannot enable
+   the Site Verification API.) Then submit `sitemap.xml`, and import the
+   property into Bing Webmaster Tools.
+2. **Google Business Profile** — the largest single factor for local ranking.
+3. **GA4 measurement ID**, if analytics is wanted.
+
 ## Editing the site
 
 See `README.md`. In short: text and photos are in `content.js`; push to

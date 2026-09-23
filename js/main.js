@@ -5,6 +5,26 @@ import { content } from '../content.js';
 import { renderPage } from './ui.js';
 
 const ui = renderPage(content);
+startAnalytics(content.analytics);
+
+// Google Analytics 4, only if a measurement ID is set in content.js. Taps on
+// any link marked data-track (Call, Directions) are sent as events, tagged
+// with where on the page they happened.
+function startAnalytics({ ga4 } = {}) {
+  if (!ga4) return;
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = function gtag() { window.dataLayer.push(arguments); };
+  window.gtag('js', new Date());
+  window.gtag('config', ga4);
+  const s = document.createElement('script');
+  s.async = true;
+  s.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(ga4)}`;
+  document.head.appendChild(s);
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('[data-track]');
+    if (a) window.gtag('event', `${a.dataset.track}_click`, { link_location: a.dataset.where || '' });
+  });
+}
 
 function hasWebGL() {
   try {

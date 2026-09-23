@@ -13,6 +13,26 @@
 export const content = {
   name: 'Yathvik Place',
 
+  // What search engines and link previews show. After editing anything in
+  // this file, run `node tools/build.mjs` (see README.md).
+  site: {
+    url: 'https://yathvikplacemoodbidri.com/',
+    title: 'Yathvik Place Moodbidri | Restaurant, Rooms, Bar & Banquet Hall',
+    description: 'Yathvik Place on Bantwala Road, Moodbidri: a multi-cuisine restaurant, modern stay rooms, a bar and a function & banquet hall. Call +91 63646 26664.',
+    shareTitle: 'Yathvik Place, Moodbidri',
+    shareDescription: 'Multi-cuisine restaurant, modern stay rooms, bar and function & banquet hall on Bantwala Road, Moodbidri.',
+    shareImage: 'images/og/og.jpg',
+    locale: 'en_IN',
+    // schema.org types for Google's business listing data
+    types: ['LocalBusiness', 'Hotel', 'Restaurant', 'BarOrPub', 'EventVenue'],
+    servesCuisine: 'Multi-cuisine',
+  },
+
+  // Analytics is off until an ID is set. Paste a Google Analytics 4
+  // measurement ID (looks like G-XXXXXXXXXX) to count visits and taps on the
+  // Call and Directions buttons. It is public, not a secret.
+  analytics: { ga4: '' },
+
   phones: [
     { display: '+91 63646 26664', tel: '+916364626664' },
     { display: '+91 90086 26663', tel: '+919008626663' },
@@ -21,7 +41,15 @@ export const content = {
   address: {
     lines: ['Near Maruti Suzuki Showroom', 'Bantwala Road, Moodbidri', 'Karnataka 574227'],
     oneLine: 'Near Maruti Suzuki Showroom, Bantwala Road, Moodbidri 574227',
+    street: 'Near Maruti Suzuki Showroom, Bantwala Road',
+    locality: 'Moodbidri',
+    region: 'Karnataka',
+    regionCode: 'IN-KA',
+    postalCode: '574227',
+    country: 'IN',
   },
+
+  geo: { lat: 13.064638, lng: 75.004501 },
 
   maps: {
     link: 'https://maps.app.goo.gl/iWJNBYz5UcRricFZ9',
@@ -44,7 +72,7 @@ export const content = {
       number: '01',
       kicker: 'By day',
       title: 'Multi-cuisine restaurant',
-      body: 'A multi-cuisine restaurant to sit down together, with family, with friends, or on your own.',
+      body: 'A multi-cuisine restaurant in Moodbidri to sit down together, with family, with friends, or on your own.',
       note: 'Our menu is coming to this page soon. Until then, call us to book a table or ask about the menu.',
       action: 'Call to book a table',
       mood: 'day',
@@ -83,7 +111,7 @@ export const content = {
       number: '04',
       kicker: 'For the occasion',
       title: 'Function & banquet hall',
-      body: 'A function and banquet hall for the occasions worth gathering people for: celebrations, ceremonies and events.',
+      body: 'A function and banquet hall in Moodbidri for the occasions worth gathering people for: celebrations, ceremonies and events.',
       note: 'Call us to ask about dates, and we will talk you through what the hall can host.',
       action: 'Call to ask about dates',
       mood: 'night',
@@ -101,5 +129,6 @@ export const content = {
 
   footer: {
     note: 'Restaurant · Stay rooms · Bar · Function & banquet hall',
+    year: '2026',
   },
 };
