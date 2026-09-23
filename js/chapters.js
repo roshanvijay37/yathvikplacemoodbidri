@@ -22,7 +22,9 @@ export const LAYOUT = {
 const slotX = -(MARK.slotOffset / MARK.svgHeight) * LAYOUT.gateHeight; // ≈ -1.33 m
 
 export const CAMERA_KEYS = [
-  { p: 0,    pos: [0, 3.2, 36],        look: [0, 7.2, 0] },
+  { p: 0,    pos: [0, 3.2, 36],        look: [0, 7.2, 0],
+    // phones: further back and aimed higher, so the whole gateway fits above the text
+    portrait: { pos: [0, 3.6, 48], look: [0, 9.5, 0] } },
   { p: 0.45, pos: [slotX, 2.3, 9],     look: [slotX, 2.4, -6] },
   { p: 0.7,  pos: [slotX, 2.1, 0],     look: [slotX + 1, 2.0, -14] },
   { p: 1,    pos: [5.2, 2.5, -12],     look: [-1.5, 1.2, -25] },

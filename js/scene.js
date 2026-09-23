@@ -990,7 +990,14 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
   }
 
   /* ---------- camera path ---------- */
-  const keys = CAMERA_KEYS.map((k) => ({ p: k.p, pos: new THREE.Vector3(...k.pos), look: new THREE.Vector3(...k.look) }));
+  // Keys may carry portrait-only overrides (`portrait: { pos, look }`) for
+  // tall phone screens, where the text takes the lower part of the view.
+  const toKeys = (portrait) => CAMERA_KEYS.map((k) => {
+    const o = (portrait && k.portrait) || k;
+    return { p: k.p, pos: new THREE.Vector3(...(o.pos || k.pos)), look: new THREE.Vector3(...(o.look || k.look)) };
+  });
+  const landscapeKeys = toKeys(false), portraitKeys = toKeys(true);
+  let keys = landscapeKeys;
   const catmull = (out, a, b, c, d, t) => {
     const t2 = t * t, t3 = t2 * t;
     return out.set(0, 0, 0)
@@ -1030,6 +1037,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     camera.aspect = w / h;
     // On portrait screens the text panel covers the lower part of the view,
     // so render the lower part of a taller frustum: the subject sits higher.
+    keys = camera.aspect < 0.8 ? portraitKeys : landscapeKeys;
     if (camera.aspect < 0.8) {
       camera.fov = 66;
       camera.setViewOffset(w, h * 1.36, 0, h * 0.36, w, h);
