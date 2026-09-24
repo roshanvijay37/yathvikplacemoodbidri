@@ -36,7 +36,13 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  /* jumps and focus never land under the fixed header or the phone call bar */
+  scroll-padding-top: calc(var(--top-h) + 8px);
+  scroll-padding-bottom: calc(var(--callbar-h) + 8px + env(safe-area-inset-bottom));
+}
 body {
   margin: 0;
   background: var(--night);
@@ -48,6 +54,8 @@ body {
 img { max-width: 100%; display: block; }
 a { color: inherit; }
 h1, h2, h3, p { margin: 0; }
+h1, h2 { text-wrap: balance; }
+p { text-wrap: pretty; }
 :focus-visible { outline: 2px solid var(--bronze-light); outline-offset: 3px; }
 
 .skip {
@@ -107,9 +115,50 @@ body[data-mood="night"] .brand-mark { fill: var(--bronze-light); }
   font: 500 13px/1 var(--sans); letter-spacing: .16em; text-transform: uppercase;
   text-decoration: none; padding: 8px 0; border-bottom: 1px solid transparent;
 }
-.nav a:hover, .nav a[aria-current="true"] { border-bottom-color: currentColor; }
+.nav a:hover, .nav a[aria-current] { border-bottom-color: currentColor; }
 .top-actions { display: flex; gap: 10px; }
 .top .top-call, .top .top-directions { display: none; }
+
+/* progress through the story, along the header's lower edge */
+.progress { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; pointer-events: none; }
+.progress span { display: block; height: 100%; background: var(--bronze); transform: scaleX(0); transform-origin: left; }
+body[data-mood="night"] .progress span { background: var(--bronze-light); }
+
+/* phone menu */
+.menu-btn {
+  display: inline-flex; align-items: center; gap: 10px;
+  min-height: 44px; padding: 0 4px 0 10px; margin-right: -4px;
+  background: none; border: 0; color: inherit; cursor: pointer; touch-action: manipulation;
+  font: 500 12px/1 var(--sans); letter-spacing: .2em; text-transform: uppercase;
+}
+.menu-icon, .menu-icon::before, .menu-icon::after { display: block; width: 20px; height: 1.5px; background: currentColor; transition: transform .25s ease, opacity .2s ease; }
+.menu-icon { position: relative; }
+.menu-icon::before, .menu-icon::after { content: ''; position: absolute; left: 0; }
+.menu-icon::before { top: -6px; }
+.menu-icon::after { top: 6px; }
+.menu-open .menu-icon { background: transparent; }
+.menu-open .menu-icon::before { transform: translateY(6px) rotate(45deg); }
+.menu-open .menu-icon::after { transform: translateY(-6px) rotate(-45deg); }
+
+@media (max-width: 899px) {
+  .menu-open .nav {
+    display: flex; flex-direction: column; gap: 0;
+    position: fixed; left: 0; right: 0; top: calc(var(--top-h) + env(safe-area-inset-top));
+    padding: 6px var(--gutter) 14px;
+    background: rgba(251, 247, 241, .98); color: var(--ink);
+    border-bottom: 1px solid rgba(152, 102, 51, .22);
+    box-shadow: 0 18px 30px rgba(22, 17, 12, .18);
+  }
+  body[data-mood="night"] .menu-open .nav { background: rgba(22, 17, 12, .98); color: var(--ivory); border-color: rgba(201, 154, 102, .22); }
+  .menu-open .nav a {
+    display: flex; align-items: center; min-height: 52px; padding: 0;
+    font-size: 15px; border-bottom: 1px solid rgba(152, 102, 51, .16);
+  }
+  .menu-open .nav a:last-child { border-bottom: 0; }
+  .menu-open .nav a[aria-current] { color: var(--bronze-deep); border-bottom-color: rgba(152, 102, 51, .16); }
+  body[data-mood="night"] .menu-open .nav a[aria-current] { color: var(--bronze-light); }
+  .menu-open .nav a[aria-current]::after { content: ''; width: 6px; height: 6px; margin-left: 12px; border-radius: 50%; background: currentColor; }
+}
 
 /* ---------- buttons ---------- */
 
@@ -120,11 +169,12 @@ body[data-mood="night"] .brand-mark { fill: var(--bronze-light); }
   text-decoration: none; text-align: center;
   background: var(--bronze); color: #fff;
   border: 1px solid var(--bronze);
+  touch-action: manipulation;
   transition: background-color .2s ease, border-color .2s ease, color .2s ease;
 }
-.btn:hover { background: var(--bronze-deep); border-color: var(--bronze-deep); }
+.btn:hover, .btn:active { background: var(--bronze-deep); border-color: var(--bronze-deep); }
 .btn-outline { background: transparent; color: inherit; border-color: currentColor; }
-.btn-outline:hover { background: rgba(152, 102, 51, .12); border-color: currentColor; }
+.btn-outline:hover, .btn-outline:active { background: rgba(152, 102, 51, .16); border-color: currentColor; }
 .btn svg { width: 18px; height: 18px; flex: none; fill: currentColor; }
 
 /* ---------- chapters ---------- */
@@ -205,7 +255,9 @@ main { position: relative; z-index: 1; }
 .panel--visit { max-width: 520px; }
 .panel--visit address { font-style: normal; font-size: 17px; line-height: 1.55; }
 .phones { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 4px; }
-.phones a { font: 600 clamp(26px, 7vw, 32px)/1.25 var(--serif); letter-spacing: .02em; text-decoration: none; color: var(--ivory); }
+.phones a { font: 600 clamp(26px, 7vw, 32px)/1.25 var(--serif); letter-spacing: .02em; text-decoration: none; color: var(--ivory);
+  font-variant-numeric: lining-nums tabular-nums; }
+.foot a, .notfound-actions a { font-variant-numeric: lining-nums tabular-nums; }
 .phones a:hover { color: var(--bronze-light); }
 .map { margin-top: 20px; aspect-ratio: 4 / 3; background: #2a2018; border: 1px solid rgba(201, 154, 102, .25); }
 .map iframe { width: 100%; height: 100%; border: 0; display: block; }
@@ -241,6 +293,9 @@ main { position: relative; z-index: 1; }
    must always scroll the page. On phones the visit panel (with its map) is
    too tall to pin, so it flows with the page. */
 @media (max-width: 899px) {
+  /* shorter chapters on phones: less scrolling for the same camera move */
+  .chapter { height: 175vh; }
+  .chapter--hero { height: 165vh; }
   .chapter--visit { height: auto; }
   .chapter--visit .sticky { position: relative; height: auto; min-height: 100vh; min-height: 100svh; }
 }
@@ -276,6 +331,7 @@ main { position: relative; z-index: 1; }
 @media (min-width: 900px) {
   :root { --gutter: 40px; --top-h: 72px; }
   .nav { display: flex; }
+  .menu-btn { display: none; }
   .top .top-call, .top .top-directions { display: inline-flex; min-height: 42px; padding: 10px 18px; }
   .top-directions { background: transparent; color: inherit; border-color: currentColor; }
   .top-directions:hover { background: rgba(152, 102, 51, .12); border-color: currentColor; }

@@ -19,7 +19,7 @@ function heroSection(c) {
     <div class="sticky">
       <div class="hero-copy">
         <p class="kicker">${esc(c.hero.kicker)}</p>
-        <h1><span class="w1">Yathvik</span> <span class="w2">Place</span><span class="sr">, Moodbidri</span></h1>
+        <h1><span class="w1" translate="no">Yathvik</span> <span class="w2" translate="no">Place</span><span class="sr">, Moodbidri</span></h1>
         <p class="lede">${esc(c.hero.lede)}</p>
         <p class="cue">${esc(c.hero.cue)}</p>
       </div>
@@ -54,7 +54,7 @@ function visitSection(c, stop) {
       <article class="panel panel--night panel--visit">
         <p class="kicker">${esc(v.kicker)}</p>
         <h2 id="visit-title">${esc(v.title)}</h2>
-        <address>${esc(c.name)}<br>${c.address.lines.map(esc).join('<br>')}</address>
+        <address><span translate="no">${esc(c.name)}</span><br>${c.address.lines.map(esc).join('<br>')}</address>
         <ul class="phones">
           ${c.phones.map((p) => `<li><a href="tel:${esc(p.tel)}" aria-label="${esc(v.callLabel)} ${esc(p.display)}" data-track="call" data-where="visit">${esc(p.display)}</a></li>`).join('')}
         </ul>
@@ -98,7 +98,7 @@ export function footerHTML(c) {
     + `<p>${esc(c.footer.note)}</p>`
     + `<p>${esc(c.address.oneLine)}</p>`
     + `<p>${c.phones.map((p) => `<a href="tel:${esc(p.tel)}" data-track="call" data-where="footer">${esc(p.display)}</a>`).join(' · ')}</p>`
-    + `<p>© ${esc(c.footer.year)} ${esc(c.name)}</p>`;
+    + `<p>© ${esc(c.footer.year)} <span translate="no">${esc(c.name)}</span></p>`;
 }
 
 // ---- Browser: fill anything the build did not, then wire up behaviour.
@@ -140,6 +140,57 @@ export function renderPage(c) {
     return anchors.length - 1;
   };
 
+  // Jump links (header nav, skip link, brand) glide to the point where their
+  // chapter's scene and panel are fully in place, not to the section's top.
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const stopOf = (id) => sections.findIndex((s) => s.id === id);
+  function goTo(id, smooth = true) {
+    const i = stopOf(id);
+    if (i < 0) return false;
+    window.scrollTo({ top: anchors[i], behavior: smooth && !reduced.matches ? 'smooth' : 'auto' });
+    return true;
+  }
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('a[href^="#"]');
+    if (!a || e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    const id = a.getAttribute('href').slice(1);
+    if (!goTo(id)) return;
+    e.preventDefault();
+    history.replaceState(null, '', id === 'arrival' ? location.pathname + location.search : `#${id}`);
+    closeMenu();
+    const target = document.getElementById(id);
+    target.setAttribute('tabindex', '-1');
+    target.focus({ preventScroll: true });
+  });
+  // Deep links (e.g. /#hall) land on their chapter once layout has settled.
+  if (location.hash.length > 1) {
+    const id = decodeURIComponent(location.hash.slice(1));
+    window.addEventListener('load', () => { measure(); goTo(id, false); }, { once: true });
+  }
+
+  // Phone menu: the header's section links in a drop-down.
+  const top = document.getElementById('top-bar');
+  const menuBtn = document.getElementById('menu-btn');
+  const menuLabel = menuBtn && menuBtn.querySelector('.menu-label');
+  function setMenu(open) {
+    if (!menuBtn) return;
+    top.classList.toggle('menu-open', open);
+    menuBtn.setAttribute('aria-expanded', String(open));
+    if (menuLabel) menuLabel.textContent = open ? 'Close' : 'Menu';
+  }
+  function closeMenu() { setMenu(false); }
+  if (menuBtn) {
+    menuBtn.addEventListener('click', () => setMenu(menuBtn.getAttribute('aria-expanded') !== 'true'));
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && top.classList.contains('menu-open')) { closeMenu(); menuBtn.focus(); } });
+    document.addEventListener('click', (e) => { if (!top.contains(e.target)) closeMenu(); });
+    window.addEventListener('scroll', () => { if (top.classList.contains('menu-open')) closeMenu(); }, { passive: true });
+  }
+
+  // Progress through the story, and the browser bar colour for the time of day.
+  const bar = document.getElementById('progress-bar');
+  const themeMeta = document.getElementById('theme-color');
+  const THEME = { day: '#f3eee6', night: '#1d1712' };
+
   // Active chapter: header mood, nav state, panel entrance
   let current = -1;
   const heroCopy = main.querySelector('.hero-copy');
@@ -151,6 +202,7 @@ export function renderPage(c) {
     heroCopy.style.transform = `translateY(${(-24 * fade).toFixed(1)}px)`;
     heroCopy.parentElement.style.setProperty('--fade', fade.toFixed(3));
     heroCopy.style.visibility = fade >= 1 ? 'hidden' : '';
+    if (bar) bar.style.transform = `scaleX(${Math.min(1, p / (sections.length - 1)).toFixed(4)})`;
     const idx = Math.min(sections.length - 1, Math.round(p));
     if (idx === current) return;
     current = idx;
@@ -158,7 +210,8 @@ export function renderPage(c) {
     document.body.dataset.chapter = String(idx);
     document.body.dataset.mood = s.dataset.mood;
     sections.forEach((sec, i) => sec.classList.toggle('is-active', i === idx));
-    navLinks.forEach((a) => a.setAttribute('aria-current', String(a.dataset.target === s.id)));
+    navLinks.forEach((a) => { if (a.dataset.target === s.id) a.setAttribute('aria-current', 'location'); else a.removeAttribute('aria-current'); });
+    if (themeMeta) themeMeta.setAttribute('content', THEME[s.dataset.mood] || THEME.day);
   };
   update();
   window.addEventListener('scroll', update, { passive: true });

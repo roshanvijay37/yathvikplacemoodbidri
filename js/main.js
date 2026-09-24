@@ -44,6 +44,8 @@ function quality() {
 }
 
 async function start3D() {
+  // Visitors who asked their browser to save data get the light version.
+  if (navigator.connection && navigator.connection.saveData) return;
   if (!hasWebGL()) {
     if (new URLSearchParams(location.search).has('debug')) console.warn('WebGL unavailable');
     return;
