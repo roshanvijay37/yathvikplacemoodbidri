@@ -22,6 +22,7 @@ and hosting. Read it before changing anything on the site.
 | `js/scene.js` | The 3D world (Three.js). Knows nothing about the text |
 | `js/chapters.js` | Camera stops, time-of-day moods and the scene layout per chapter |
 | `textures/` | CC0 PBR textures for the 3D scene, desktop (`1k`) and phone (`512`) sizes |
+| `models/` | CC0 scanned furniture, lamps, plants and bottles (desktop only), credits in `models/README.md` |
 | `brand/` | Logo files — `mark.svg` is also the source of the 3D gateway and the favicon |
 | `images/<slot>/` | Photos for each section: `restaurant`, `rooms`, `bar`, `hall` |
 | `images/og/` | Social-sharing preview (`og.jpg`) and icons |
@@ -97,6 +98,9 @@ Photos appear as a swipeable strip inside the chapter's panel, on top of the
 - Also: a facade with real window openings and balconies, the brand sign on
   the roof, procedural clouds, dawn mist, marble reflections (desktop), and
   weathering (tile variation, rain streaks, bronze patina).
+- On desktop, scanned CC0 models from Poly Haven (1.3 MB, loaded after the
+  scene is showing) replace the procedural chairs, tables, lamps, bar stools and
+  bottles, and add potted plants. Phones keep the procedural versions.
 - Each chapter pays only for what it shows: glow is off in daylight, and the
   shadow map stops updating at night when the moonlight is too faint to matter.
 - Three.js r170 is loaded from jsDelivr through the import map in

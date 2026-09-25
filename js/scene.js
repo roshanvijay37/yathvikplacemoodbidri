@@ -18,6 +18,8 @@ import { mergeGeometries as mergeRaw } from 'three/addons/utils/BufferGeometryUt
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -28,6 +30,7 @@ import { LAYOUT, CAMERA_KEYS, MOODS } from './chapters.js';
 const MARK_URL = new URL('../brand/mark.svg', import.meta.url);
 const LOGO_URL = new URL('../brand/logo.svg', import.meta.url);
 const TEX_URL = new URL('../textures/', import.meta.url);
+const MODEL_URL = new URL('../models/', import.meta.url);
 
 const C = (hex) => new THREE.Color(hex);
 const smooth = (t) => t * t * (3 - 2 * t);
@@ -357,6 +360,42 @@ function grimePlaster(mat, grime, origin) {
         }`);
   };
   mat.customProgramCacheKey = () => 'grime-plaster';
+}
+
+// Scanned CC0 models (models/, see models/README.md) placed as instances.
+// The model is normalised: centred, standing on y = 0, scaled to a target
+// height, then turned by `rotY` so its front matches the placement's facing.
+function toFloatAttributes(g) {
+  for (const name of ['position', 'normal', 'uv']) {
+    const a = g.getAttribute(name);
+    if (!a || a.array instanceof Float32Array) continue;
+    const out = new Float32Array(a.count * a.itemSize);
+    for (let i = 0; i < a.count; i++) for (let c = 0; c < a.itemSize; c++) out[i * a.itemSize + c] = a.getComponent(i, c);
+    g.setAttribute(name, new THREE.BufferAttribute(out, a.itemSize));
+  }
+  return g;
+}
+function instancesOf(root, matrices, { height, rotY = 0, cast = true }) {
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3()), centre = box.getCenter(new THREE.Vector3());
+  const k = height / size.y;
+  const norm = new THREE.Matrix4().makeRotationY(rotY)
+    .multiply(new THREE.Matrix4().makeScale(k, k, k))
+    .multiply(new THREE.Matrix4().makeTranslation(-centre.x, -box.min.y, -centre.z));
+  const meshes = [];
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const g = toFloatAttributes(o.geometry.clone());
+    g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(norm, o.matrixWorld));
+    g.computeBoundingSphere();
+    const im = new THREE.InstancedMesh(g, o.material, matrices.length);
+    matrices.forEach((m, i) => im.setMatrixAt(i, m));
+    im.castShadow = cast;
+    im.receiveShadow = true;
+    meshes.push(im);
+  });
+  return meshes;
 }
 
 /* ------------------------------------------------------------------ */
@@ -769,6 +808,9 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     scene.add(col);
   }
 
+  // Where the scanned models go (desktop), and the stand-ins they replace.
+  const placements = { tables: [], chairs: [], lanterns: [], stools: [], shelves: [], replaced: { restaurant: [], lanterns: [], stools: [], bottles: [] } };
+
   /* ---------- restaurant: tables and chairs under a bronze pergola ---------- */
   {
     const { xs, zs, lampY } = LAYOUT.restaurant;
@@ -802,6 +844,8 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     for (const x of xs) for (const z of zs) {
       m.makeTranslation(x, 0, z);
       tops.setMatrixAt(i, m); bases.setMatrixAt(i, m);
+      placements.tables.push(m.clone());
+      placements.lanterns.push(new THREE.Matrix4().makeTranslation(x, 0, z));
       shades.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x, lampY, z));
       for (let c = 0; c < 4; c++) {
         const a = c * Math.PI / 2 + Math.PI / 4;
@@ -809,6 +853,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
         q.setFromAxisAngle(Y, Math.atan2(-dx, -dz));
         const cm = new THREE.Matrix4().compose(new THREE.Vector3(x + dx, 0, z + dz), q, one);
         chairFrames.setMatrixAt(k, cm); chairBacks.setMatrixAt(k, cm); chairSeats.setMatrixAt(k, cm);
+        placements.chairs.push(cm.clone());
         k++;
       }
       bulb(G_RESTAURANT, x, lampY + 0.08, z, 0.06);
@@ -818,6 +863,8 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
       i++;
     }
     scene.add(tops, bases, chairFrames, chairBacks, chairSeats, shades);
+    placements.replaced.restaurant.push(tops, bases, chairFrames, chairBacks, chairSeats);
+    placements.replaced.lanterns.push(shades);
 
     const px = 6.2, z0 = -15.5, z1 = -31.5, top = 3.95;
     const parts = [];
@@ -989,6 +1036,10 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
       bottle.setColorAt(i, C(tones[i % tones.length]));
     }
     scene.add(bottle);
+    placements.replaced.bottles.push(bottle);
+    for (const sy of [1.375, 2.075, 2.775]) for (let z = zFrom - 0.9; z > zTo + 0.6; z -= 1.7) {
+      placements.shelves.push(new THREE.Matrix4().compose(new THREE.Vector3(bx + 0.27, sy, z + (rand() - 0.5) * 0.3), new THREE.Quaternion().setFromAxisAngle(Y, rand() * Math.PI * 2), new THREE.Vector3(1, 1, 1)));
+    }
     scene.add(cast(new THREE.Mesh(box(6, 0.18, len + 2, x - 0.4, 4.3, zc, 1), woodDark)));
     for (const cz of [zFrom + 0.8, zTo - 0.8]) for (const cx of [x - 3.2, x + 2.4]) scene.add(cast(new THREE.Mesh(rbox(0.16, 4.3, 0.16, 0.02, cx, 2.15, cz), bronzeDark))); // matte: polished posts flare under the bar lamps
     const ns = Math.floor(len / 1.6);
@@ -1007,6 +1058,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     for (let i = 0; i < ns; i++) {
       const z = zFrom - 0.8 - i * 1.6;
       stool.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x + 1.05, 0, z));
+      placements.stools.push(new THREE.Matrix4().makeRotationY(rand() * Math.PI * 2).setPosition(x + 1.05, 0, z));
       lamps.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x, 2.5, z));
       bulb(G_BAR, x, 2.53, z, 0.05);
       glows.add(x, 2.5, z, 0.7, G_BAR, '#ffb35f');
@@ -1014,6 +1066,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
       pool(G_BAR, x + 1.1, 0.015, z, 0.9);
     }
     scene.add(stool, lamps);
+    placements.replaced.stools.push(stool);
     blob(x, zc, 3, len + 2);
     barLight.position.set(x + 0.6, 2.6, zc);
     scene.add(barLight);
@@ -1477,6 +1530,46 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
   render();
   updateOverlay();
   reducedMotion.addEventListener?.('change', () => { needsRender = true; });
+
+  // Scanned furniture, lamps, plants and bottles replace their stand-ins once
+  // they arrive (desktop only; phones keep the lighter procedural versions).
+  if (!low) loadModels().catch((err) => { if (debug) console.warn('[scene] models:', err); });
+
+  async function loadModels() {
+    const loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder);
+    const get = (name) => loader.loadAsync(new URL(`${name}.glb`, MODEL_URL).href).then((g) => g.scene).catch(() => null);
+    const [chair, table, lantern, stoolM, plantL, plantS, bottles] = await Promise.all(
+      ['dining_chair_02', 'round_wooden_table_01', 'brass_diya_lantern', 'bar_chair_round_01', 'potted_plant_02', 'potted_plant_04', 'wine_bottles_01'].map(get));
+    const swap = (model, matrices, opts, replaced) => {
+      if (!model || !matrices.length) return;
+      for (const im of instancesOf(model, matrices, opts)) scene.add(im);
+      for (const r of replaced || []) r.visible = false;
+    };
+    swap(table, placements.tables, { height: 0.77 }, placements.replaced.restaurant.slice(0, 2));
+    swap(chair, placements.chairs, { height: 0.97, rotY: 0 }, placements.replaced.restaurant.slice(2));
+    // lanterns hang from the pergola: top at the beams, bulb inside
+    const hang = placements.lanterns.map((m) => m.clone().setPosition(new THREE.Vector3().setFromMatrixPosition(m).setY(LAYOUT.restaurant.lampY - 0.25)));
+    swap(lantern, hang, { height: 0.95, cast: false }, placements.replaced.lanterns);
+    swap(stoolM, placements.stools, { height: 0.8 }, placements.replaced.stools);
+    swap(bottles, placements.shelves, { height: 0.3, cast: false }, placements.replaced.bottles);
+
+    // plants: gateway, pergola corners, building entrance, bar ends, hall entrance
+    const { x: sx, zFrom: sz0, zTo: sz1, cols } = LAYOUT.stay;
+    const ez = sz0 - ((sz0 - sz1) / cols) * 3;
+    const { x: bxx, zFrom: bz0, zTo: bz1 } = LAYOUT.bar;
+    const at = (x, y, z, s = 1) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromAxisAngle(Y, rand() * Math.PI * 2), new THREE.Vector3(s, s, s));
+    swap(plantL, [
+      at(-10.2, 0, 0.4), at(10.2, 0, 0.4),
+      at(-5.7, 0, -15), at(5.7, 0, -15), at(-5.7, 0, -32), at(5.7, 0, -32),
+      at(sx - 2.7, 0, ez - 4.1, 1.1), at(sx - 2.7, 0, ez + 4.1, 1.1),
+      at(bxx + 1.6, 0, bz0 + 1.4), at(bxx + 1.6, 0, bz1 - 1.4),
+      at(-3.8, 0, -110.6), at(3.8, 0, -110.6),
+    ], { height: 1.15 });
+    swap(plantS, [at(bxx, 1.11, bz0 - 0.45), at(bxx, 1.11, bz1 + 0.45), at(-9.4, 0.3, 1.2, 0.9), at(9.4, 0.3, 1.2, 0.9)], { height: 0.42 });
+    renderer.shadowMap.needsUpdate = true;
+    needsRender = true;
+  }
   requestAnimationFrame(frame);
 
   return { renderer, scene, camera };

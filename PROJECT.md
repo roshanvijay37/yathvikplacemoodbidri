@@ -194,6 +194,15 @@ Checked in desktop Chrome (1440×900, Intel Iris Xe) and 390×844 phone
 emulation: all effects hold full frame rate on that laptop once start-up has
 settled. **Not yet tested on a real phone.**
 
+### Scanned models (26 Sep 2026)
+
+Desktop only: CC0 Poly Haven models (optimised to 1.3 MB total) replace the
+procedural restaurant chairs (tufted leather dining chairs), tables (turned
+dark wood), lamps (brass diya lanterns), bar stools and back-bar bottles, and
+add terracotta and ceramic potted plants at the gateway, pergola corners,
+building entrance, bar and hall. Loaded after the scene appears; if one fails,
+its stand-in stays. Phones download none of them. Credits in `models/README.md`.
+
 ### Realism pass 2 (26 Sep 2026)
 
 - **Building:** facade is a 35 cm slab with real window openings (reveals,
