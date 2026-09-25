@@ -17,6 +17,7 @@ import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
 import { mergeGeometries as mergeRaw } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Sky } from 'three/addons/objects/Sky.js';
+import { Reflector } from 'three/addons/objects/Reflector.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -25,6 +26,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { LAYOUT, CAMERA_KEYS, MOODS } from './chapters.js';
 
 const MARK_URL = new URL('../brand/mark.svg', import.meta.url);
+const LOGO_URL = new URL('../brand/logo.svg', import.meta.url);
 const TEX_URL = new URL('../textures/', import.meta.url);
 
 const C = (hex) => new THREE.Color(hex);
@@ -260,6 +262,103 @@ function palmGeometries(low) {
   return { trunkGeo, frondGeo: mergeGeometries(fronds) };
 }
 
+// Soft blotchy alpha for low mist layers.
+function mistTexture() {
+  const t = canvasTexture(256, 256, (ctx, w, h) => {
+    ctx.clearRect(0, 0, w, h);
+    for (let i = 0; i < 70; i++) {
+      const x = rand() * w, y = rand() * h, r = 20 + rand() * 60;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, 'rgba(255,255,255,0.22)');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+  }, false);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+// Weathering for the facade, mapped over its whole face: rising damp along the
+// base, rain streaks running down from the parapet and from every window sill.
+function grimeTexture(len, h, sills) {
+  const W = 1024, H = 512;
+  const t = canvasTexture(W, H, (ctx) => {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+    const px = (z) => (z / len) * W, py = (y) => H - (y / h) * H;
+    let g = ctx.createLinearGradient(0, py(0), 0, py(0.9));
+    g.addColorStop(0, 'rgba(92,78,62,0.55)');
+    g.addColorStop(1, 'rgba(92,78,62,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, py(0.9), W, py(0) - py(0.9));
+    const streak = (x, y0, len0, width, alpha) => {
+      const gg = ctx.createLinearGradient(0, y0, 0, y0 + len0);
+      gg.addColorStop(0, `rgba(70,62,52,${alpha})`);
+      gg.addColorStop(1, 'rgba(70,62,52,0)');
+      ctx.fillStyle = gg;
+      ctx.fillRect(x - width / 2, y0, width, len0);
+    };
+    for (let x = 0; x < W; x += 3 + rand() * 9) streak(x, py(h), 12 + rand() * 60, 1 + rand() * 3, 0.1 + rand() * 0.18);
+    for (const s of sills) {
+      const x0 = px(s.u - s.w / 2), x1 = px(s.u + s.w / 2);
+      for (let x = x0; x < x1; x += 2 + rand() * 6) streak(x, py(s.y), 8 + rand() * 46, 1 + rand() * 2.5, 0.08 + rand() * 0.2);
+    }
+  });
+  return t;
+}
+
+// Tone variation per marble tile and broad unevenness, so the paving is not
+// one flawless repeat. Works on the texture's own UVs (2 x 2 tiles per repeat).
+function weatherMarble(mat) {
+  mat.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+      #ifdef USE_MAP
+      {
+        vec2 tileId = floor(vMapUv * 2.0);
+        float h = fract(sin(dot(tileId, vec2(12.9898, 78.233))) * 43758.5453);
+        float broad = sin(vMapUv.x * 0.37 + sin(vMapUv.y * 0.21)) * sin(vMapUv.y * 0.29);
+        diffuseColor.rgb *= 0.93 + 0.1 * h + 0.035 * broad;
+      }
+      #endif`);
+  };
+  mat.customProgramCacheKey = () => 'weather-marble';
+}
+
+// Uneven patina on the bronze: slow darker and lighter patches.
+function weatherBronze(mat) {
+  mat.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+      #ifdef USE_ROUGHNESSMAP
+      {
+        vec2 q = vRoughnessMapUv * 0.9;
+        float n = sin(q.x * 1.7 + sin(q.y * 1.3)) * sin(q.y * 2.1 + sin(q.x * 0.7));
+        diffuseColor.rgb *= 0.9 + 0.1 * n;
+      }
+      #endif`);
+  };
+  mat.customProgramCacheKey = () => 'weather-bronze';
+}
+
+// The facade's grime map, sampled in the facade's own coordinates.
+function grimePlaster(mat, grime, origin) {
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uGrime = { value: grime };
+    sh.uniforms.uGrimeOrigin = { value: origin }; // (zFrom, len, h)
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vFacadePos;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFacadePos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vFacadePos;\nuniform sampler2D uGrime;\nuniform vec3 uGrimeOrigin;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        {
+          vec2 guv = vec2((uGrimeOrigin.x - vFacadePos.z) / uGrimeOrigin.y, vFacadePos.y / uGrimeOrigin.z);
+          diffuseColor.rgb *= texture2D(uGrime, clamp(guv, 0.0, 1.0)).rgb;
+        }`);
+  };
+  mat.customProgramCacheKey = () => 'grime-plaster';
+}
+
 /* ------------------------------------------------------------------ */
 /* Textures: CC0 PBR sets from Poly Haven, see textures/README.md       */
 /* ------------------------------------------------------------------ */
@@ -373,7 +472,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
   const low = quality === 'low';
   let needsRender = true;
   const redraw = () => { needsRender = true; };
-  const svgText = await (await fetch(MARK_URL)).text();
+  const [svgText, logoText] = await Promise.all([MARK_URL, LOGO_URL].map((u) => fetch(u).then((r) => r.text())));
 
   const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
   // Sharp-screen phones start at 2x; the quality ladder lowers it if frames are slow.
@@ -416,6 +515,9 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
   applySet([wood, woodDark], loadSet('wood', res, maxAniso), 0.6, redraw);
 
   const unitMark = markGeometry(svgText, low);
+  weatherMarble(marble);
+  weatherMarble(marbleWarm);
+  weatherBronze(bronze);
   const shadowCasters = [];
   const cast = (o, receive = true) => { o.castShadow = true; o.receiveShadow = receive; shadowCasters.push(o); return o; };
 
@@ -462,6 +564,57 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
   stars.frustumCulled = false;
   scene.add(stars);
 
+  // Clouds: a drifting fbm layer projected onto a plane overhead, lit from the
+  // sun's side. Between the stars (420 m) and the night dome (440 m).
+  const cloudUniforms = {
+    uTime: { value: 0 }, uCover: { value: 0.4 }, uOpacity: { value: 1 }, uBright: { value: 2 },
+    uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uLit: { value: C('#ffffff') }, uShade: { value: C('#9aa4b0') },
+  };
+  const clouds = new THREE.Mesh(
+    new THREE.SphereGeometry(430, 48, 24),
+    new THREE.ShaderMaterial({
+      side: THREE.BackSide, transparent: true, depthWrite: false, fog: false, uniforms: cloudUniforms,
+      vertexShader: /* glsl */`varying vec3 vDir; void main() { vDir = position; vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = p.xyww; }`,
+      fragmentShader: /* glsl */`
+        uniform float uTime, uCover, uOpacity, uBright; uniform vec3 uSunDir, uLit, uShade; varying vec3 vDir;
+        float hash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+        float noise(vec3 x) {
+          vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x), mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
+                     mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x), mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
+        }
+        float fbm(vec3 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * noise(p); p *= 2.03; a *= 0.5; } return s + 0.03; }
+        void main() {
+          vec3 d = normalize(vDir);
+          if (d.y < 0.01) discard;
+          vec2 uv = d.xz / (d.y + 0.09);
+          vec3 p = vec3(uv * 1.1 + vec2(uTime * 0.006, uTime * 0.002), uTime * 0.003);
+          float n = fbm(p);
+          float c = smoothstep(1.0 - uCover, 1.0 - uCover + 0.3, n);
+          float fade = smoothstep(0.01, 0.16, d.y);
+          float toSun = pow(max(dot(d, normalize(uSunDir)), 0.0), 3.0);
+          vec3 col = mix(uShade, uLit, 0.35 + 0.65 * toSun) * uBright;
+          col *= 1.0 - 0.4 * smoothstep(0.55, 1.0, n);
+          gl_FragColor = vec4(col, c * fade * uOpacity);
+        }`,
+    }),
+  );
+  clouds.renderOrder = -0.5;
+  clouds.frustumCulled = false;
+  scene.add(clouds);
+
+  // Low mist over the approach, visible at dawn only.
+  const mistMat = new THREE.MeshBasicMaterial({ map: mistTexture(), color: '#ffffff', transparent: true, opacity: 0, depthWrite: false });
+  const mist = new THREE.Group();
+  for (const [y, s] of [[0.35, 1], [0.9, 1.3], [1.6, 1.7]]) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(160, 160), mistMat);
+    m.rotation.x = -Math.PI / 2;
+    m.position.set(0, y, -10);
+    m.material.map.repeat.set(3 * s, 3 * s);
+    mist.add(m);
+  }
+  scene.add(mist);
+
   // A marble plaza (texture covers 1.5 m; UVs are in those tiles) with an
   // approach path, a stone kerb, and lawn beyond it.
   const PLAZA = { x: 24, zNear: 22, zFar: -146 };
@@ -475,6 +628,36 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     return m;
   };
   flat(scaleUV(new THREE.PlaneGeometry(plazaW, plazaL), plazaW / 1.5, plazaL / 1.5), marble, 0, (PLAZA.zNear + PLAZA.zFar) / 2);
+
+  // Polished marble: a faint mirror image, stronger at grazing angles and at
+  // night. Desktop only — it renders the scene a second time.
+  let reflector = null;
+  if (!low) {
+    reflector = new Reflector(new THREE.PlaneGeometry(plazaW, plazaL), {
+      textureWidth: 512, textureHeight: 512, clipBias: 0.003, multisample: 0, // a faint reflection on stone does not need more
+      shader: {
+        name: 'MarbleReflection',
+        uniforms: { color: { value: null }, tDiffuse: { value: null }, textureMatrix: { value: null }, uStrength: { value: 0.15 } },
+        vertexShader: /* glsl */`
+          uniform mat4 textureMatrix; varying vec4 vUv; varying vec3 vWorld;
+          void main() { vUv = textureMatrix * vec4(position, 1.0); vWorld = (modelMatrix * vec4(position, 1.0)).xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: /* glsl */`
+          uniform sampler2D tDiffuse; uniform float uStrength; varying vec4 vUv; varying vec3 vWorld;
+          void main() {
+            vec3 v = normalize(cameraPosition - vWorld);
+            float fresnel = 0.25 + 0.75 * pow(1.0 - clamp(v.y, 0.0, 1.0), 3.0);
+            vec3 c = texture2DProj(tDiffuse, vUv).rgb;
+            gl_FragColor = vec4(c, uStrength * fresnel);
+          }`,
+      },
+    });
+    reflector.material.transparent = true;
+    reflector.material.depthWrite = false;
+    reflector.rotation.x = -Math.PI / 2;
+    reflector.position.set(0, 0.004, (PLAZA.zNear + PLAZA.zFar) / 2);
+    reflector.renderOrder = 1;
+    scene.add(reflector);
+  }
   flat(scaleUV(new THREE.PlaneGeometry(7, 60), 7 / 1.5, 60 / 1.5), marble, 0, PLAZA.zNear + 30).position.y = 0.002;
   const lawnMat = new THREE.MeshStandardMaterial({ map: grassTexture(), color: '#a39e86', roughness: 1, metalness: 0 });
   flat(scaleUV(new THREE.PlaneGeometry(1400, 1400), 1400 / 4, 1400 / 4), lawnMat, 0, -60).position.y = -0.01;
@@ -645,49 +828,133 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
   }
 
   /* ---------- stay: a plastered building whose windows light up ---------- */
+  // The facade is a 35 cm slab with real openings, so windows sit in reveals
+  // and cast their own shadows; balconies, sills, AC units, a parapet with
+  // water tanks, and the name on the roof line.
   const windows = [];
-  let roomMesh;
+  let roomMesh, signGlow;
   {
     const { x, zFrom, zTo, floors, cols, floorHeight } = LAYOUT.stay;
-    const len = zFrom - zTo, h = floors * floorHeight + 0.8, depth = 9;
+    const len = zFrom - zTo, h = floors * floorHeight + 0.8, depth = 9, slab = 0.35;
     const zc = (zFrom + zTo) / 2;
-    scene.add(cast(new THREE.Mesh(box(depth, h, len, x + depth / 2, h / 2, zc, 3), plaster)));
+    const winW = 1.7, winH = 2.1, spacing = len / cols;
+    const ez = zFrom - spacing * 3, doorW = 3.8, doorH = 2.8;
+
+    // body behind the facade slab
+    scene.add(cast(new THREE.Mesh(box(depth - slab, h, len, x + slab + (depth - slab) / 2, h / 2, zc, 3), plaster)));
     blob(x + 1, zc, 5, len + 3);
 
-    const trims = [];
-    for (let f = 1; f <= floors; f++) trims.push(rbox(0.32, 0.14, len + 0.2, 0.03, x - 0.1, f * floorHeight, zc));
-    trims.push(rbox(0.5, 0.5, len + 0.5, 0.05, x - 0.18, h - 0.2, zc));
-    const frames = [];
-    const winW = 1.7, winH = 2.1, spacing = len / cols;
+    // facade slab with openings; shape u runs along the facade from zFrom
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0); shape.lineTo(len, 0); shape.lineTo(len, h); shape.lineTo(0, h); shape.lineTo(0, 0);
+    const openings = [], sills = [];
     for (let f = 0; f < floors; f++) for (let c = 0; c < cols; c++) {
-      const wz = zFrom - spacing * (c + 0.5), wy = f * floorHeight + 0.55 + winH / 2 + 0.2;
       if (f === 0 && (c === 2 || c === 3)) continue; // entrance
-      windows.push({ y: wy, z: wz, threshold: 0.08 + rand() * 0.84, lit: -1 });
-      frames.push(box(0.12, winH + 0.2, 0.1, x - 0.05, wy, wz - winW / 2 - 0.05), box(0.12, winH + 0.2, 0.1, x - 0.05, wy, wz + winW / 2 + 0.05),
-        box(0.12, 0.1, winW + 0.2, x - 0.05, wy + winH / 2 + 0.05, wz), box(0.2, 0.08, winW + 0.3, x - 0.1, wy - winH / 2 - 0.04, wz));
+      const u = spacing * (c + 0.5), wy = f * floorHeight + 0.55 + winH / 2 + 0.2;
+      openings.push({ u, y: wy, w: winW, h: winH, f, c });
+      sills.push({ u, y: wy - winH / 2, w: winW + 0.3 });
+      windows.push({ y: wy, z: zFrom - u, threshold: 0.08 + rand() * 0.84, lit: -1 });
     }
-    scene.add(cast(new THREE.Mesh(mergeGeometries([...trims, ...frames]), bronzeDark)));
+    for (const o of openings) {
+      const hole = new THREE.Path();
+      hole.moveTo(o.u - o.w / 2, o.y - o.h / 2); hole.lineTo(o.u - o.w / 2, o.y + o.h / 2);
+      hole.lineTo(o.u + o.w / 2, o.y + o.h / 2); hole.lineTo(o.u + o.w / 2, o.y - o.h / 2); hole.lineTo(o.u - o.w / 2, o.y - o.h / 2);
+      shape.holes.push(hole);
+    }
+    const du = zFrom - ez;
+    const door = new THREE.Path();
+    door.moveTo(du - doorW / 2, 0.02); door.lineTo(du - doorW / 2, doorH); door.lineTo(du + doorW / 2, doorH); door.lineTo(du + doorW / 2, 0.02); door.lineTo(du - doorW / 2, 0.02);
+    shape.holes.push(door);
+    const facadeGeo = new THREE.ExtrudeGeometry(shape, { depth: slab, bevelEnabled: false, curveSegments: 1 });
+    scaleUV(facadeGeo, 1 / 3, 1 / 3);
+    facadeGeo.rotateY(Math.PI / 2);
+    facadeGeo.translate(x, 0, zFrom);
+    const facadeMat = plaster.clone();
+    grimePlaster(facadeMat, grimeTexture(len, h, sills), new THREE.Vector3(zFrom, len, h));
+    applySet(facadeMat, loadSet('plaster', res, maxAniso), 1, redraw);
+    scene.add(cast(new THREE.Mesh(facadeGeo, facadeMat)));
 
-    // Entrance: glazed doors under a bronze canopy.
-    const ez = zFrom - spacing * 3;
+    // window frames set back in the reveals, projecting stone sills, floor bands
+    const frames = [], stone = [];
+    for (const o of openings) {
+      const z = zFrom - o.u, fx = x + slab - 0.1;
+      frames.push(box(0.08, o.h, 0.06, fx, o.y, z - o.w / 2 + 0.03), box(0.08, o.h, 0.06, fx, o.y, z + o.w / 2 - 0.03),
+        box(0.08, 0.06, o.w, fx, o.y + o.h / 2 - 0.03, z), box(0.08, 0.06, o.w, fx, o.y - o.h / 2 + 0.03, z), box(0.06, 0.04, o.w, fx, o.y + 0.2, z));
+      stone.push(box(0.5, 0.07, o.w + 0.3, x + 0.08, o.y - o.h / 2 - 0.035, z));
+    }
+    for (let f = 1; f <= floors; f++) stone.push(rbox(0.16, 0.12, len, 0.02, x - 0.06, f * floorHeight - 0.1, zc));
+    stone.push(box(0.4, 0.6, len + 0.1, x + 0.1, 0.3, zc, 1.5)); // plinth band
+    scene.add(cast(new THREE.Mesh(mergeGeometries(frames), bronzeDark)));
+    scene.add(cast(new THREE.Mesh(mergeGeometries(stone), marbleWarm)));
+
+    // balconies on the upper floors: slab, bronze rail, glass front
+    const balcSlabs = [], balcRails = [], balcGlass = [];
+    for (const o of openings) {
+      if (o.f === 0 || (o.c + o.f) % 2) continue;
+      const z = zFrom - o.u, y0 = o.y - o.h / 2 - 0.1, bw = o.w + 0.9, bd = 1.0;
+      balcSlabs.push(rbox(bd, 0.14, bw, 0.03, x - bd / 2, y0, z));
+      balcRails.push(cyl(0.025, 0.025, bw, 10, 0, 0, 0).rotateX(Math.PI / 2).translate(x - bd + 0.05, y0 + 1.05, z));
+      for (const dz of [-bw / 2 + 0.03, bw / 2 - 0.03]) balcRails.push(box(bd, 0.04, 0.04, x - bd / 2, y0 + 1.05, z + dz), cyl(0.02, 0.02, 1.0, 8, x - bd + 0.05, y0 + 0.55, z + dz));
+      balcGlass.push(box(0.02, 0.9, bw - 0.1, x - bd + 0.06, y0 + 0.55, z));
+    }
+    if (balcSlabs.length) {
+      scene.add(cast(new THREE.Mesh(mergeGeometries(balcSlabs), marbleWarm)));
+      scene.add(cast(new THREE.Mesh(mergeGeometries(balcRails), bronze)));
+      scene.add(new THREE.Mesh(mergeGeometries(balcGlass), new THREE.MeshStandardMaterial({ color: '#b9c6cc', metalness: 0.2, roughness: 0.05, transparent: true, opacity: 0.22, depthWrite: false })));
+    }
+
+    // outdoor AC units beside some windows
+    const acs = [];
+    for (const o of openings) {
+      if (rand() > 0.3 || o.f === 0) continue;
+      const z = zFrom - o.u + (o.w / 2 + 0.7) * (rand() < 0.5 ? -1 : 1);
+      acs.push(rbox(0.32, 0.55, 0.8, 0.03, x - 0.17, o.y - 0.55, z));
+    }
+    if (acs.length) scene.add(cast(new THREE.Mesh(mergeGeometries(acs), new THREE.MeshStandardMaterial({ color: '#d8d5ce', roughness: 0.55, metalness: 0.1 }))));
+
+    // parapet and coping; black water tanks on the roof
+    scene.add(cast(new THREE.Mesh(box(0.35, 0.9, len, x + 0.17, h + 0.45, zc, 3), facadeMat)));
+    scene.add(cast(new THREE.Mesh(rbox(0.5, 0.08, len + 0.2, 0.02, x + 0.17, h + 0.94, zc), marbleWarm)));
+    const tankMat = new THREE.MeshStandardMaterial({ color: '#1b1b1c', roughness: 0.6 });
+    for (const dz of [-6, 5]) {
+      const tank = new THREE.Mesh(mergeGeometries([cyl(0.75, 0.8, 1.5, 20, 0, 0.75, 0), cyl(0.3, 0.75, 0.2, 20, 0, 1.6, 0)]), tankMat);
+      tank.position.set(x + 4, h + 0.3, zc + dz);
+      scene.add(cast(tank));
+      scene.add(new THREE.Mesh(box(1.8, 0.3, 1.8, x + 4, h + 0.15, zc + dz), marbleWarm));
+    }
+
+    // the name on the roof line, above the entrance, with a warm glow at night
+    const logoGeo = markGeometry(logoText, low);
+    const sign = new THREE.Mesh(logoGeo, bronzePolished);
+    sign.scale.setScalar(2.4);
+    sign.rotation.y = -Math.PI / 2;
+    sign.position.set(x + 0.1, h + 0.98, ez);
+    scene.add(cast(sign, false));
+    signGlow = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 3.2), new THREE.MeshBasicMaterial({ map: radialTexture('rgba(255,190,120,0.9)', 'rgba(255,190,120,0)'), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+    signGlow.rotation.y = -Math.PI / 2;
+    signGlow.position.set(x + 0.2, h + 2.2, ez);
+    scene.add(signGlow);
+
+    // entrance canopy with down-lights over glazed doors
     scene.add(cast(new THREE.Mesh(rbox(2.4, 0.18, 7, 0.04, x - 1.1, 3.1, ez), bronze)));
     for (const dz of [-3.2, 3.2]) scene.add(cast(new THREE.Mesh(cyl(0.05, 0.05, 3.05, 12, x - 2.1, 1.52, ez + dz), bronze)));
+    for (const dz of [-2.2, 0, 2.2]) { bulb(G_PATH, x - 1.2, 2.98, ez + dz, 0.06); pool(G_PATH, x - 1.2, 0.02, ez + dz, 1.2); }
 
     const winGeo = new THREE.PlaneGeometry(winW, winH);
     winGeo.rotateY(-Math.PI / 2);
     roomMesh = new THREE.InstancedMesh(winGeo, new THREE.MeshBasicMaterial({ map: roomTexture(), color: '#ffffff' }), windows.length + 1);
     const glass = new THREE.InstancedMesh(winGeo, new THREE.MeshStandardMaterial({ color: '#2a3038', metalness: 1, roughness: 0.06, transparent: true, opacity: 0.6 }), windows.length + 1);
     windows.forEach((w, i) => {
-      roomMesh.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x - 0.02, w.y, w.z));
-      glass.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x - 0.07, w.y, w.z));
+      roomMesh.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x + slab - 0.015, w.y, w.z)); // just in front of the body wall
+      glass.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x + slab - 0.12, w.y, w.z));
       roomMesh.setColorAt(i, C('#000000'));
     });
     // lobby doors, wider and always the first to light
     const lobby = windows.length;
-    windows.push({ y: 1.45, z: ez, threshold: 0.02, lit: -1 });
-    const dm = new THREE.Matrix4().compose(new THREE.Vector3(x - 0.02, 1.45, ez), new THREE.Quaternion(), new THREE.Vector3(1, 1.3, 2.2));
+    windows.push({ y: doorH / 2, z: ez, threshold: 0.02, lit: -1 });
+    const dm = new THREE.Matrix4().compose(new THREE.Vector3(x + slab - 0.015, doorH / 2 + 0.02, ez), new THREE.Quaternion(), new THREE.Vector3(1, doorH / winH, doorW / winW));
     roomMesh.setMatrixAt(lobby, dm);
-    glass.setMatrixAt(lobby, dm.clone().setPosition(x - 0.07, 1.45, ez));
+    glass.setMatrixAt(lobby, dm.clone().setPosition(x + slab - 0.12, doorH / 2 + 0.02, ez));
     roomMesh.setColorAt(lobby, C('#000000'));
     scene.add(roomMesh, glass);
   }
@@ -709,7 +976,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     scene.add(cast(new THREE.Mesh(mergeGeometries(shelves), bronzeDark)));
     stripMat = new THREE.MeshStandardMaterial({ color: '#000', emissive: '#ffb066', emissiveIntensity: 0 });
     const strips = [];
-    for (const sy of [1.3, 2.0, 2.7]) strips.push(box(0.02, 0.03, len - 0.8, bx + 0.14, sy + 0.02, zc));
+    for (const sy of [1.35, 2.05, 2.75]) strips.push(box(0.02, 0.025, len - 0.8, bx + 0.3, sy - 0.045, zc)); // under each shelf, clear of it
     scene.add(new THREE.Mesh(mergeGeometries(strips), stripMat));
     const nb = low ? 42 : 96;
     const bottleGeo = lathe([[0, 0], [0.045, 0], [0.047, 0.01], [0.047, 0.2], [0.03, 0.25], [0.015, 0.28], [0.015, 0.34], [0, 0.34]], low ? 8 : 14);
@@ -723,7 +990,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     }
     scene.add(bottle);
     scene.add(cast(new THREE.Mesh(box(6, 0.18, len + 2, x - 0.4, 4.3, zc, 1), woodDark)));
-    for (const cz of [zFrom + 0.8, zTo - 0.8]) for (const cx of [x - 3.2, x + 2.4]) scene.add(cast(new THREE.Mesh(rbox(0.16, 4.3, 0.16, 0.02, cx, 2.15, cz), bronze)));
+    for (const cz of [zFrom + 0.8, zTo - 0.8]) for (const cx of [x - 3.2, x + 2.4]) scene.add(cast(new THREE.Mesh(rbox(0.16, 4.3, 0.16, 0.02, cx, 2.15, cz), bronzeDark))); // matte: polished posts flare under the bar lamps
     const ns = Math.floor(len / 1.6);
     const stoolGeo = mergeGeometries([
       lathe([[0, 0.74], [0.2, 0.74], [0.21, 0.76], [0.2, 0.8], [0, 0.81]], 20),
@@ -960,6 +1227,16 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     bloom.enabled = allowBloom && cur.bloom > 0.15;
     renderer.shadowMap.autoUpdate = allowShadows && cur.sunIntensity > 0.6;
     starMat.opacity = cur.stars;
+    cloudUniforms.uCover.value = cur.cloudCover;
+    cloudUniforms.uBright.value = cur.cloudBright;
+    cloudUniforms.uSunDir.value.setFromSphericalCoords(1, deg(90 - Math.max(cur.skyElev, 2)), deg(cur.skyAzim));
+    cloudUniforms.uLit.value.copy(cur.sunColor).lerp(C('#ffffff'), 0.35);
+    cloudUniforms.uShade.value.copy(cur.hemiSky).multiplyScalar(0.8);
+    mistMat.opacity = cur.mist;
+    mist.visible = cur.mist > 0.01;
+    mistMat.color.copy(cur.fog);
+    if (reflector) reflector.material.uniforms.uStrength.value = cur.reflect;
+    signGlow.material.opacity = 0.55 * cur.lamps;
     stars.visible = cur.stars > 0.01;
 
     const L = cur.lamps, F = cur.festive, H = Math.max(F, L * 0.5);
@@ -1058,6 +1335,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
   // If frames are slow, give up effects one at a time, cheapest loss first.
   const debug = new URLSearchParams(location.search).has('debug');
   const ladder = [
+    function reflectionsOff() { if (!reflector || !reflector.visible) return false; reflector.visible = false; return true; },
     function pixelRatioDown() {
       const r = renderer.getPixelRatio();
       const next = [1.5, 1.25].find((v) => v < r - 0.01);
@@ -1074,7 +1352,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     function pixelRatio1() { if (renderer.getPixelRatio() <= 1.01) return false; renderer.setPixelRatio(1); resize(); return true; },
     function shadowsOff() { if (!allowShadows) return false; allowShadows = false; renderer.shadowMap.autoUpdate = false; return true; },
   ];
-  if (debug) window.__scene = { renderer, scene, camera, sun, bloom, composer };
+  if (debug) window.__scene = { renderer, scene, camera, sun, bloom, composer, reflector, clouds };
   const steps = [];
   let lastMedian = 0;
   let overlay = null;
@@ -1103,8 +1381,9 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
   let frameTimes = [];
   let slowWindows = 0;
   const adaptFrom = performance.now() + 4000;
+  const fixedQuality = debug && new URLSearchParams(location.search).has('fixed'); // measuring: no step-downs
   function adapt(dt) {
-    if (performance.now() < adaptFrom) return;
+    if (fixedQuality || performance.now() < adaptFrom) return;
     frameTimes.push(dt);
     if (frameTimes.length < 60) return;
     const sorted = [...frameTimes].sort((x, y) => x - y);
@@ -1173,6 +1452,8 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
       sky.position.copy(pos);
       nightDome.position.copy(pos);
       stars.position.copy(pos);
+      clouds.position.copy(pos);
+      cloudUniforms.uTime.value = time;
       if (moving || needsRender) applyMood(p);
       placeSun();
       festive.material.uniforms.uTime.value = time;

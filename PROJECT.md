@@ -194,6 +194,21 @@ Checked in desktop Chrome (1440×900, Intel Iris Xe) and 390×844 phone
 emulation: all effects hold full frame rate on that laptop once start-up has
 settled. **Not yet tested on a real phone.**
 
+### Realism pass 2 (26 Sep 2026)
+
+- **Building:** facade is a 35 cm slab with real window openings (reveals,
+  recessed frames, stone sills), balconies with glass rails on upper floors,
+  outdoor AC units, parapet, black water tanks on the roof, entrance canopy
+  down-lights, and the brand lockup (from `brand/logo.svg`) in bronze on the
+  roof line, glowing at night.
+- **Sky:** drifting procedural clouds per time of day; low mist at dawn.
+- **Marble:** faint reflections of the scene (desktop only, dropped first if
+  frames are slow); tile-to-tile tone variation.
+- **Wear:** rain streaks under sills and the parapet, rising damp on the
+  facade base, patina on the bronze.
+- Checked in headless desktop Chrome on this PC's Intel GPU, 1440×900 and
+  412×741 phone emulation. Not yet tested on a real phone.
+
 ### SEO (23 Sep 2026)
 
 - All text, links and structured data are written into the HTML by

@@ -94,14 +94,18 @@ Photos appear as a swipeable strip inside the chapter's panel, on top of the
   Poly Haven in `textures/` (marble, plaster, cherry wood — credits in
   `textures/README.md`); soft sun shadows; HDR glow on lamps; ACES tone
   mapping; light film grain and vignette.
+- Also: a facade with real window openings and balconies, the brand sign on
+  the roof, procedural clouds, dawn mist, marble reflections (desktop), and
+  weathering (tile variation, rain streaks, bronze patina).
 - Each chapter pays only for what it shows: glow is off in daylight, and the
   shadow map stops updating at night when the moonlight is too faint to matter.
 - Three.js r170 is loaded from jsDelivr through the import map in
   `index.html`, only if the device supports WebGL.
 - Phones get 512 px textures (marble stays 1k), a 1024 shadow map, pixel ratio
   up to 1.5 and fewer palms and particles. If frames stay slow after start-up,
-  quality steps down in this order: pixel ratio, shadow-map size, glow, pixel
-  ratio 1, shadows. Add `?debug` to the URL to log frame times and each step.
+  quality steps down in this order: marble reflections, pixel ratio, shadow-map
+  size, glow, pixel ratio 1, shadows. Add `?debug` to the URL to see frame times
+  and each step on screen; `?debug&fixed` turns the step-downs off for measuring.
 - Without WebGL, a CSS gradient with the bronze mark stands in, changing colour
   per chapter. With "reduce motion" switched on, the camera cuts between
   chapters instead of gliding, and nothing drifts.
