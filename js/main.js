@@ -36,11 +36,31 @@ function hasWebGL() {
 }
 
 function quality() {
+  const q = new URLSearchParams(location.search);
+  if (q.has('debug') && ['low', 'high'].includes(q.get('tier'))) return q.get('tier'); // testing only
   const small = window.matchMedia('(max-width: 899px)').matches;
   const coarse = window.matchMedia('(pointer: coarse)').matches;
   const lowMemory = navigator.deviceMemory !== undefined && navigator.deviceMemory <= 4;
   const saveData = navigator.connection && navigator.connection.saveData;
-  return small || coarse || lowMemory || saveData ? 'low' : 'high';
+  return small || coarse || lowMemory || saveData || !strongGPU() ? 'low' : 'high';
+}
+
+// The full desktop scene (scanned furniture, grass, mirror-polished marble,
+// ambient occlusion) needs a dedicated graphics card: on an Intel Iris Xe
+// laptop at 1440x900 it ran near 10 frames a second before stepping down,
+// where the lighter version holds about 55. So only a GPU that names itself as
+// a discrete or high-end one gets it; integrated graphics, and browsers that
+// hide the GPU's name, get the lighter version.
+function strongGPU() {
+  try {
+    const gl = document.createElement('canvas').getContext('webgl');
+    const ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+    const name = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : '';
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    return /NVIDIA|GeForce|RTX|GTX|Quadro|Radeon RX|Radeon Pro|Arc\(TM\) A|Arc A\d|Apple M\d+ (Pro|Max|Ultra)/i.test(name);
+  } catch {
+    return false;
+  }
 }
 
 async function start3D() {
