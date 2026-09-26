@@ -20,12 +20,15 @@ import { Sky } from 'three/addons/objects/Sky.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { ScenePass, DepthFxPass, DofPass, SunMask } from './fx/passes.js';
+import { addWind, addFlicker, buildPool, buildRain, buildHallDecor } from './fx/life.js';
+import { startTilt, createHotspots } from './fx/interaction.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { LAYOUT, CAMERA_KEYS, MOODS } from './chapters.js';
+import { LAYOUT, CAMERA_KEYS, MOODS, HOTSPOTS } from './chapters.js';
 
 const MARK_URL = new URL('../brand/mark.svg', import.meta.url);
 const LOGO_URL = new URL('../brand/logo.svg', import.meta.url);
@@ -255,6 +258,7 @@ function palmGeometries(low) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setAttribute('aT', new THREE.Float32BufferAttribute(uv.filter((_, i) => i % 2 === 0), 1)); // 0 at base, 1 at tip (wind)
     g.setIndex(idx);
     g.rotateX((rand() - 0.5) * 0.6);
     g.rotateY((k / n) * Math.PI * 2 + rand() * 0.3);
@@ -437,16 +441,18 @@ const G_RESTAURANT = 0, G_BAR = 1, G_HALL = 2, G_PATH = 3;
 function glowMaterial() {
   return new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: { uGroups: { value: new THREE.Vector4() }, uScale: { value: 400 }, uMax: { value: 256 } },
+    uniforms: { uGroups: { value: new THREE.Vector4() }, uScale: { value: 400 }, uMax: { value: 256 }, uTime: { value: 0 } },
     vertexShader: /* glsl */`
       attribute float aSize; attribute float aGroup; attribute vec3 aColor;
-      uniform vec4 uGroups; uniform float uScale; uniform float uMax;
+      uniform vec4 uGroups; uniform float uScale; uniform float uMax; uniform float uTime;
       varying vec3 vColor; varying float vI;
       void main() {
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         float g = aGroup < 0.5 ? uGroups.x : aGroup < 1.5 ? uGroups.y : aGroup < 2.5 ? uGroups.z : uGroups.w;
         vI = g; vColor = aColor;
-        gl_PointSize = g < 0.01 ? 0.0 : min(aSize * uScale / -mv.z, uMax);
+        float fl = 1.0 + 0.1 * sin(uTime * 8.7 + position.x * 7.1 + position.z * 3.3) * sin(uTime * 4.9 + position.y * 11.0);
+        vI *= fl;
+        gl_PointSize = g < 0.01 ? 0.0 : min(aSize * fl * uScale / -mv.z, uMax);
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: /* glsl */`
@@ -507,9 +513,11 @@ function setSky(sky, m) {
 /* Scene                                                               */
 /* ------------------------------------------------------------------ */
 
-export async function createScene({ host, quality, reducedMotion, getProgress }) {
+export async function createScene({ host, quality, reducedMotion, getProgress, hotspots = [] }) {
   const low = quality === 'low';
   let needsRender = true;
+  // Time and weather shared by every shader that moves (wind, flicker, water, rain).
+  const fxShared = { uTime: { value: 0 }, uWind: { value: 1 }, uRain: { value: 0 } };
   const redraw = () => { needsRender = true; };
   const [svgText, logoText] = await Promise.all([MARK_URL, LOGO_URL].map((u) => fetch(u).then((r) => r.text())));
 
@@ -558,7 +566,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
   weatherMarble(marbleWarm);
   weatherBronze(bronze);
   const shadowCasters = [];
-  const cast = (o, receive = true) => { o.castShadow = true; o.receiveShadow = receive; shadowCasters.push(o); return o; };
+  const cast = (o, receive = true) => { o.castShadow = true; o.receiveShadow = receive; o.layers.enable(2); shadowCasters.push(o); return o; };
 
   /* ---------- sky, stars, floor ---------- */
   const sky = new Sky();
@@ -729,6 +737,10 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
       trunks.setMatrixAt(i, m);
       fronds.setMatrixAt(i, m);
     });
+    addWind(trunks.material, fxShared, 'trunk');
+    addWind(fronds.material, fxShared, 'frond');
+    trunks.layers.enable(2);
+    fronds.layers.enable(2);
     scene.add(trunks, fronds);
   }
 
@@ -743,9 +755,10 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
   };
 
   /* ---------- lamps: emissive bulbs (bloom) + halos + light pools ---------- */
-  const lampColor = ['#ffcf94', '#ffb25e', '#ffd8a0', '#ffc27a'];
+  const lampColor = ['#ffcf94', '#ffb25e', '#ffd8a0', '#ffc27a', '#ffb347'];
+  const G_FLAME = 4;
   const bulbMats = lampColor.map((c) => new THREE.MeshStandardMaterial({ color: '#1a120a', emissive: c, emissiveIntensity: 0, roughness: 0.4 }));
-  const bulbs = [[], [], [], []];
+  const bulbs = [[], [], [], [], []];
   const bulb = (group, x, y, z, r = 0.07) => bulbs[group].push([x, y, z, r]);
   const glows = new GlowBuilder();
   const pools = [[], [], [], []];
@@ -755,6 +768,14 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     g.translate(x, y, z);
     pools[group].push(g);
   };
+
+  /* ---------- reflecting pool with floating diyas, before the gateway ---------- */
+  const poolFx = buildPool({
+    scene, shared: fxShared, reflector, kerbMaterial: marbleWarm, halfW: 3.2, z0: 4.2, z1: 19,
+    addFlame: (x, y, z) => bulb(G_FLAME, x, y, z, 0.022),
+    addGlow: (x, y, z) => glows.add(x, y, z, 0.32, G_PATH, '#ffc070'),
+    addPool: (x, y, z) => pool(G_PATH, x, y, z, 0.45),
+  });
 
   /* ---------- the gateway ---------- */
   const gate = cast(new THREE.Mesh(unitMark, bronze));
@@ -1120,6 +1141,12 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     for (const t of tops) strand(t, centre, 1.4, 0.035);
     for (let k = 0; k < tops.length - 1; k++) strand(tops[k], tops[k + 1], 1.1, 0.03); // entrance left open
     pool(G_HALL, cx, 0.15, cz, 8);
+    ring.layers.enable(2);
+    buildHallDecor({
+      scene, low, cx, cz, radius, tops, chandelier: { r: 2.4, y: chY }, marble: marbleWarm, brass: bronzePolished,
+      addFlame: (x, y, z) => bulb(G_FLAME, x, y, z, 0.02),
+      addGlow: (x, y, z) => glows.add(x, y, z, 0.55, G_HALL, '#ffc27a'),
+    });
 
     const n = low ? 90 : 220;
     const base = [], speed = [];
@@ -1165,6 +1192,8 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
 
   /* ---------- assemble lamps ---------- */
   const bulbGeo = new THREE.SphereGeometry(1, 12, 8);
+  // each group flickers its own way: diya lanterns and open flames most
+  [[0.18, 1], [0.04, 0.6], [0.1, 1.3], [0.05, 0.8], [0.3, 1.4]].forEach(([amt, spd], gi) => addFlicker(bulbMats[gi], fxShared, amt, spd));
   bulbs.forEach((list, gi) => {
     if (!list.length) return;
     const im = new THREE.InstancedMesh(bulbGeo, bulbMats[gi], list.length);
@@ -1178,6 +1207,12 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     map: poolTex, color: c, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, polygonOffset: true, polygonOffsetFactor: -2,
   }));
   pools.forEach((list, gi) => { if (list.length) scene.add(new THREE.Mesh(mergeGeometries(list), poolMats[gi])); });
+
+  const rainFx = buildRain({ scene, shared: fxShared, count: low ? 2600 : 7000 });
+  {
+    const { x, zFrom, zTo } = LAYOUT.bar;
+    rainFx.setRoof(new THREE.Vector3(x - 3.5, -1, zTo - 1.2), new THREE.Vector3(x + 2.7, 4.3, zFrom + 1.2));
+  }
 
   /* ---------- lights ---------- */
   const hemi = new THREE.HemisphereLight('#fff', '#888', 1);
@@ -1230,7 +1265,21 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
   /* ---------- post-processing ---------- */
   const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: isWebGL2 ? (low ? 2 : 4) : 0 });
   const composer = new EffectComposer(renderer, rt);
-  composer.addPass(new RenderPass(scene, camera));
+  let scenePass = null, depthFx = null, dof = null, sunMask = null;
+  if (!low && isWebGL2) {
+    // desktop: render into a target with depth, then ambient occlusion, light
+    // shafts and depth of field read it
+    scenePass = new ScenePass(scene, camera, 4);
+    sunMask = new SunMask(1024);
+    sunMask.scene = scene;
+    depthFx = new DepthFxPass(camera, scenePass, sunMask);
+    dof = new DofPass(camera, scenePass);
+    composer.addPass(scenePass);
+    composer.addPass(depthFx);
+    composer.addPass(dof);
+  } else {
+    composer.addPass(new RenderPass(scene, camera));
+  }
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.3, 0.8, 0.85);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
@@ -1248,6 +1297,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
   for (const k of colourKeys) cur[k] = moods[0][k].clone();
   const lightDir = new THREE.Vector3();
   let envKey = '';
+  const marbleBase = marble.color.clone(), marbleWarmBase = marbleWarm.color.clone();
   let allowBloom = true, allowShadows = true;
 
   function applyMood(p) {
@@ -1290,10 +1340,25 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     mistMat.color.copy(cur.fog);
     if (reflector) reflector.material.uniforms.uStrength.value = cur.reflect;
     signGlow.material.opacity = 0.55 * cur.lamps;
+    fxShared.uRain.value = cur.rain;
+    fxShared.uWind.value = 1 + cur.rain * 1.4;
+    // wet stone: glossier and a little darker, stronger reflections
+    marble.roughness = 0.85 - 0.5 * cur.wet;
+    marbleWarm.roughness = 0.7 - 0.42 * cur.wet;
+    marble.color.copy(marbleBase).multiplyScalar(1 - 0.18 * cur.wet);
+    marbleWarm.color.copy(marbleWarmBase).multiplyScalar(1 - 0.18 * cur.wet);
+    if (reflector) reflector.material.uniforms.uStrength.value = cur.reflect + 0.22 * cur.wet;
+    if (depthFx) {
+      const u = depthFx.mainQuad.material.uniforms;
+      u.uRays.value = cur.rays;
+      u.uColor.value.copy(cur.sunColor).multiplyScalar(Math.min(cur.sunIntensity, 3.4) * 0.07);
+      u.uSunDir.value.copy(lightDir);
+      u.uAO.value = 0.55;
+    }
     stars.visible = cur.stars > 0.01;
 
     const L = cur.lamps, F = cur.festive, H = Math.max(F, L * 0.5);
-    const lampLevel = [L, L, H, L];
+    const lampLevel = [L, L, H, L, L];
     bulbMats.forEach((mat, gi) => { mat.emissiveIntensity = 1.25 * lampLevel[gi]; });
     glowMat.uniforms.uGroups.value.set(L, L, H, L);
     poolMats[G_RESTAURANT].opacity = 0.45 * L;
@@ -1355,6 +1420,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     shadowFocus.y = 0;
     sun.target.position.copy(shadowFocus);
     sun.position.copy(shadowFocus).addScaledVector(lightDir, 100);
+    if (sunMask && cur.rays > 0.001) sunMask.place(shadowFocus, lightDir);
   }
 
   /* ---------- sizing and quality ---------- */
@@ -1388,6 +1454,9 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
   // If frames are slow, give up effects one at a time, cheapest loss first.
   const debug = new URLSearchParams(location.search).has('debug');
   const ladder = [
+    function depthOfFieldOff() { if (!dof || !dof.enabled) return false; dof.enabled = false; return true; },
+    function ambientOcclusionOff() { if (!depthFx || !depthFx.aoEnabled) return false; depthFx.aoEnabled = false; return true; },
+    function lightShaftsOff() { if (!depthFx || !depthFx.raysEnabled) return false; depthFx.raysEnabled = false; return true; },
     function reflectionsOff() { if (!reflector || !reflector.visible) return false; reflector.visible = false; return true; },
     function pixelRatioDown() {
       const r = renderer.getPixelRatio();
@@ -1405,7 +1474,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
     function pixelRatio1() { if (renderer.getPixelRatio() <= 1.01) return false; renderer.setPixelRatio(1); resize(); return true; },
     function shadowsOff() { if (!allowShadows) return false; allowShadows = false; renderer.shadowMap.autoUpdate = false; return true; },
   ];
-  if (debug) window.__scene = { renderer, scene, camera, sun, bloom, composer, reflector, clouds };
+  if (debug) window.__scene = { renderer, scene, camera, sun, bloom, composer, reflector, clouds, depthFx, dof, sunMask };
   const steps = [];
   let lastMedian = 0;
   let overlay = null;
@@ -1462,6 +1531,8 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
   /* ---------- loop ---------- */
   const pointer = new THREE.Vector2();
   const pointerTarget = new THREE.Vector2();
+  startTilt(pointerTarget, reducedMotion);
+  const spots = createHotspots(hotspots.map((h) => ({ ...h, pos: HOTSPOTS[h.id] })).filter((h) => h.pos), camera);
   if (window.matchMedia('(pointer: fine)').matches) {
     window.addEventListener('pointermove', (e) => {
       pointerTarget.set(e.clientX / window.innerWidth - 0.5, e.clientY / window.innerHeight - 0.5);
@@ -1510,7 +1581,13 @@ export async function createScene({ host, quality, reducedMotion, getProgress })
       if (moving || needsRender) applyMood(p);
       placeSun();
       festive.material.uniforms.uTime.value = time;
+      fxShared.uTime.value = time;
+      glowMat.uniforms.uTime.value = time;
+      rainFx.update(camera.position, still ? 0 : cur.rain);
+      poolFx.update(cur, lightDir, cur.sunColor, time);
+      if (dof) dof.focus = pos.distanceTo(look);
       render();
+      spots.update(Math.round(p), host.clientWidth, host.clientHeight);
       lastP = p;
       needsRender = false;
       if (!still && !document.hidden) adapt(dt);

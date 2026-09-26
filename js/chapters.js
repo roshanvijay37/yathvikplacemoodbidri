@@ -50,14 +50,17 @@ export const CAMERA_KEYS = [
 // bloom  — glow strength around bright lights. exposure — overall brightness.
 // cloudCover/cloudBright — sky cover (0-1) and cloud brightness; mist — low
 // mist over the approach; reflect — mirror strength of the polished marble.
+// rays — volumetric light shafts (desktop); rain — monsoon rain amount; wet —
+// wet stone (glossier, darker, stronger reflections).
 export const MOODS = [
   { // 0 — arrival, early morning: low sun from the front-left, warm on the bronze
-    skyElev: 6, skyAzim: 35, turbidity: 6, rayleigh: 2.4, mie: 0.006, mieG: 0.86,
-    lightElev: 8, lightAzim: 35, sunColor: '#ffc690', sunIntensity: 3,
+    skyElev: 5, skyAzim: 118, turbidity: 6, rayleigh: 2.4, mie: 0.006, mieG: 0.86,
+    lightElev: 8, lightAzim: 118, sunColor: '#ffc690', sunIntensity: 3,
     hemiSky: '#f3dcc4', hemiGround: '#5c4533', hemiIntensity: 0.45,
     fog: '#e7c7a6', fogNear: 70, fogFar: 380, exposure: 0.62, env: 'dawn', envIntensity: 1.0,
     bloom: 0.22, lamps: 0.2, windows: 0.05, stars: 0, festive: 0,
     cloudCover: 0.42, cloudBright: 2.2, mist: 0.55, reflect: 0.16,
+    rays: 1.0, rain: 0, wet: 0,
   },
   { // 1 — restaurant, bright midday
     skyElev: 58, skyAzim: 35, turbidity: 3, rayleigh: 1.1, mie: 0.004, mieG: 0.8,
@@ -66,6 +69,7 @@ export const MOODS = [
     fog: '#cfdbe6', fogNear: 90, fogFar: 460, exposure: 0.5, env: 'day', envIntensity: 0.65,
     bloom: 0.1, lamps: 0, windows: 0, stars: 0, festive: 0,
     cloudCover: 0.36, cloudBright: 2.8, mist: 0, reflect: 0.1,
+    rays: 0.12, rain: 0, wet: 0,
   },
   { // 2 — stay, golden hour into blue hour
     skyElev: 1.2, skyAzim: -100, turbidity: 8, rayleigh: 3, mie: 0.008, mieG: 0.9,
@@ -73,7 +77,8 @@ export const MOODS = [
     hemiSky: '#8d8fb5', hemiGround: '#3a2a1e', hemiIntensity: 0.3,
     fog: '#b7948a', fogNear: 60, fogFar: 330, exposure: 0.72, env: 'dusk', envIntensity: 0.85,
     bloom: 0.35, lamps: 0.55, windows: 0.5, stars: 0.05, festive: 0,
-    cloudCover: 0.5, cloudBright: 2.0, mist: 0.12, reflect: 0.2,
+    cloudCover: 0.62, cloudBright: 1.6, mist: 0.12, reflect: 0.2,
+    rays: 0.55, rain: 0.3, wet: 0.55,
   },
   { // 3 — bar, night
     skyElev: -14, skyAzim: 60, turbidity: 2, rayleigh: 0.6, mie: 0.004, mieG: 0.8,
@@ -81,7 +86,8 @@ export const MOODS = [
     hemiSky: '#2b3550', hemiGround: '#120c08', hemiIntensity: 0.1,
     fog: '#0e0b0b', fogNear: 25, fogFar: 150, exposure: 0.95, env: 'night', envIntensity: 0.5,
     bloom: 0.75, lamps: 1, windows: 1, stars: 1, festive: 0,
-    cloudCover: 0.3, cloudBright: 0.18, mist: 0, reflect: 0.32,
+    cloudCover: 0.62, cloudBright: 0.16, mist: 0, reflect: 0.32,
+    rays: 0, rain: 0.75, wet: 1,
   },
   { // 4 — hall, lit for an event
     skyElev: -14, skyAzim: 60, turbidity: 2, rayleigh: 0.6, mie: 0.004, mieG: 0.8,
@@ -89,7 +95,8 @@ export const MOODS = [
     hemiSky: '#3a2c2a', hemiGround: '#120c08', hemiIntensity: 0.22,
     fog: '#150e0a', fogNear: 25, fogFar: 160, exposure: 1.12, env: 'night', envIntensity: 0.45,
     bloom: 0.7, lamps: 1, windows: 1, stars: 0.8, festive: 1,
-    cloudCover: 0.3, cloudBright: 0.18, mist: 0, reflect: 0.3,
+    cloudCover: 0.35, cloudBright: 0.18, mist: 0, reflect: 0.3,
+    rays: 0, rain: 0, wet: 0.7,
   },
   { // 5 — visit, the whole place lit at night
     skyElev: -14, skyAzim: 60, turbidity: 2, rayleigh: 0.6, mie: 0.004, mieG: 0.8,
@@ -98,5 +105,15 @@ export const MOODS = [
     fog: '#0e0b0b', fogNear: 80, fogFar: 380, exposure: 1.35, env: 'night', envIntensity: 0.8,
     bloom: 0.7, lamps: 1, windows: 1, stars: 1, festive: 0.6,
     cloudCover: 0.3, cloudBright: 0.2, mist: 0, reflect: 0.28,
+    rays: 0, rain: 0, wet: 0.45,
   },
 ];
+
+// Tap points in the scene (world positions), one per chapter, keyed by the
+// chapter id in content.js. Each opens a card with that chapter's call button.
+export const HOTSPOTS = {
+  restaurant: [1.5, 1.45, -23.5],
+  stay: [12.2, 8.1, -55.5],
+  bar: [-3, 1.5, -85],
+  hall: [0, 2.6, -131.2],
+};
