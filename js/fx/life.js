@@ -132,6 +132,7 @@ export function buildPool({ scene, shared, reflector, kerbMaterial, halfW = 3.2,
       tReflect: { value: null }, tNormal: { value: normalTex }, uTexMat: { value: new THREE.Matrix4() },
       uTime: shared.uTime, uRain: shared.uRain, uDeep: { value: new THREE.Color('#0b1a1a') },
       uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunColor: { value: new THREE.Color() }, uSkyTint: { value: new THREE.Color('#8fa4b0') },
+      uFloor: { value: new THREE.Color('#3a4441') }, uAmbient: { value: new THREE.Color('#10171a') },
     }]);
     uniforms.uTime = shared.uTime;
     uniforms.uRain = shared.uRain;
@@ -150,7 +151,7 @@ export function buildPool({ scene, shared, reflector, kerbMaterial, halfW = 3.2,
       fragmentShader: /* glsl */`
         #include <fog_pars_fragment>
         uniform sampler2D tReflect, tNormal; uniform mat4 uTexMat; uniform float uTime, uRain;
-        uniform vec3 uDeep, uSunDir, uSunColor, uSkyTint;
+        uniform vec3 uDeep, uSunDir, uSunColor, uSkyTint, uFloor, uAmbient;
         varying vec3 vWorld;
         float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         vec2 rainRipples(vec2 p) {
@@ -166,6 +167,19 @@ export function buildPool({ scene, shared, reflector, kerbMaterial, halfW = 3.2,
           }
           return acc;
         }
+        // Caustics: the bright, moving net of light a rippled surface focuses
+        // onto a pool floor (a well-known iterated-sine approximation).
+        float caustic(vec2 p, float t) {
+          vec2 i = p; float c = 1.0; const float inten = 0.005;
+          for (int n = 0; n < 4; n++) {
+            float tt = t * (1.0 - 3.5 / float(n + 1));
+            i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x));
+            vec2 q = vec2(p.x / (sin(i.x + tt) / inten), p.y / (cos(i.y + tt) / inten));
+            c += 1.0 / max(length(q), 1e-3); // guard: sin/cos can reach zero
+          }
+          c = 1.17 - pow(c / 4.0, 1.4);
+          return clamp(pow(abs(c), 8.0), 0.0, 4.0);
+        }
         void main() {
           vec2 uv = vWorld.xz * 0.11;
           vec3 n1 = texture2D(tNormal, uv + vec2(uTime * 0.012, uTime * 0.007)).xyz * 2.0 - 1.0;
@@ -177,7 +191,20 @@ export function buildPool({ scene, shared, reflector, kerbMaterial, halfW = 3.2,
           float fres = 0.02 + 0.98 * pow(1.0 - max(dot(N, V), 0.0), 5.0);
           vec4 c = uTexMat * vec4(vWorld + vec3(slope.x, 0.0, slope.y) * 0.6, 1.0);
           vec3 refl = texture2DProj(tReflect, c).rgb;
-          vec3 col = mix(uDeep, refl, clamp(0.35 + fres, 0.0, 1.0));
+          // Looking into the water: the view ray bends at the surface (refraction,
+          // 1/1.33) and meets a stone floor ~55 cm down, so the floor pattern
+          // wobbles with the ripples; sunlight on that floor is focused into
+          // caustics. Deeper water tints it blue-green.
+          vec3 rd = refract(-V, N, 0.75);
+          vec2 fp = vWorld.xz + rd.xz / max(-rd.y, 0.25) * 0.55;
+          vec2 tile = abs(fract(fp / 0.6) - 0.5);
+          float grout = smoothstep(0.47, 0.5, max(tile.x, tile.y));
+          vec3 floorCol = uFloor * (0.85 + 0.15 * h21(floor(fp / 0.6))) * (1.0 - 0.35 * grout);
+          float sunUp = clamp(uSunDir.y * 3.0, 0.0, 1.0);
+          float ca = caustic(fp * 2.2 + 17.0, uTime * 0.45);
+          vec3 lit = uAmbient + uSkyTint * 0.12 + uSunColor * sunUp * (0.35 + 1.6 * ca);
+          vec3 body = floorCol * lit * vec3(0.4, 0.62, 0.62);
+          vec3 col = mix(body, refl, clamp(0.25 + fres, 0.0, 1.0));
           vec3 R = reflect(-V, N);
           col += uSunColor * pow(max(dot(R, normalize(uSunDir)), 0.0), 400.0) * 4.0;
           gl_FragColor = vec4(col, 1.0);

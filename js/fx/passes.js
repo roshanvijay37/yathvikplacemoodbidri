@@ -361,7 +361,7 @@ export class TaaPass extends Pass {
         vec3 tonemap(vec3 c) { return c / (1.0 + max(c.r, max(c.g, c.b))); }
         vec3 untonemap(vec3 c) { return c / max(1.0 - max(c.r, max(c.g, c.b)), 1e-4); }
         void main() {
-          vec3 cur = tonemap(textureLod(tDiffuse, vUv, 0.0).rgb);
+          vec3 cur = tonemap(max(textureLod(tDiffuse, vUv, 0.0).rgb, 0.0));
           vec3 lo = toYCoCg(cur), hi = lo, m1 = lo, m2 = lo * lo;
           for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
             if (x == 0 && y == 0) continue;
@@ -384,7 +384,7 @@ export class TaaPass extends Pass {
 
           float a = uBlend;
           if (uReset > 0.5 || prev.w <= 0.0 || any(lessThan(puv, vec2(0.0))) || any(greaterThan(puv, vec2(1.0)))) a = 1.0;
-          vec3 hist = toYCoCg(tonemap(textureLod(tHistory, puv, 0.0).rgb));
+          vec3 hist = toYCoCg(tonemap(max(textureLod(tHistory, puv, 0.0).rgb, 0.0)));
           hist = toRGB(clamp(hist, lo, hi));
           gl_FragColor = vec4(untonemap(mix(hist, cur, a)), 1.0);
         }`,

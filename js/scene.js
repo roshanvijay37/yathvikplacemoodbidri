@@ -25,6 +25,7 @@ import { addWind, addFlicker, buildPool, buildRain, buildHallDecor } from './fx/
 import { startTilt, createHotspots } from './fx/interaction.js';
 import { useContactShadows } from './fx/shadows.js';
 import { buildGrass } from './fx/grass.js';
+import { buildBeams, buildMotes, buildBirds, buildFireflies, buildPuddles } from './fx/atmos.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -535,15 +536,57 @@ class GlowBuilder {
   }
 }
 
-// Film grain and a soft vignette, applied after tone mapping.
+// The last pass, after tone mapping: film grain, a soft vignette, and a lens
+// flare when the sun is in frame — a soft glare and short starburst round the
+// sun, a faint halo, and a few tinted ghosts along the line from the sun
+// through the centre, as a real multi-element lens makes. The flare checks the
+// depth buffer for anything standing in front of the sun. It lives in this
+// pass rather than its own because on integrated GPUs one more full-screen
+// pass costs more than all its maths.
 const GrainShader = {
-  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uGrain: { value: 0.035 }, uVignette: { value: 0.28 } },
+  uniforms: {
+    tDiffuse: { value: null }, uTime: { value: 0 }, uGrain: { value: 0.035 }, uVignette: { value: 0.28 },
+    tDepth: { value: null }, uHasDepth: { value: 0 }, uSun: { value: new THREE.Vector2(0.5, 0.5) },
+    uFlare: { value: 0 }, uOcc: { value: 1 }, uFlareColor: { value: new THREE.Color(1, 0.85, 0.65) }, uAspect: { value: 1 },
+  },
   vertexShader: /* glsl */`varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */`
-    uniform sampler2D tDiffuse; uniform float uTime, uGrain, uVignette; varying vec2 vUv;
+    uniform sampler2D tDiffuse, tDepth; uniform float uTime, uGrain, uVignette, uHasDepth, uFlare, uOcc, uAspect;
+    uniform vec2 uSun; uniform vec3 uFlareColor; varying vec2 vUv;
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    float disc(vec2 c, float r) { return 1.0 - smoothstep(r * 0.55, r, length((vUv - c) * vec2(uAspect, 1.0))); }
     void main() {
       vec4 c = texture2D(tDiffuse, vUv);
+      if (uFlare > 0.001) {
+        float vis = uOcc;
+        if (uHasDepth > 0.5) {
+          // share of open sky (far depth) in a small cross round the sun
+          float s = 0.0;
+          for (int i = -2; i <= 2; i++) {
+            s += step(0.99999, texture2D(tDepth, uSun + vec2(float(i) * 0.006, 0.0)).x);
+            s += step(0.99999, texture2D(tDepth, uSun + vec2(0.0, float(i) * 0.006 * uAspect)).x);
+          }
+          vis = s / 10.0;
+        }
+        float k = uFlare * vis;
+        if (k > 0.001) {
+          vec2 d = (vUv - uSun) * vec2(uAspect, 1.0);
+          float r = length(d);
+          vec2 toC = vec2(0.5) - uSun;
+          vec3 f = vec3(0.0);
+          if (r < 0.7) { // glare and starburst only near the sun
+            float glare = exp(-r * 9.0) * 0.22 + exp(-r * 40.0) * 0.4;
+            float burst = r < 0.45 ? pow(abs(cos(atan(d.y, d.x) * 3.0)), 60.0) * exp(-r * 7.0) * 0.22 : 0.0;
+            f = uFlareColor * (glare + burst);
+          }
+          f += vec3(0.9, 0.6, 0.35) * disc(uSun + toC * 0.55, 0.035) * 0.04;
+          f += vec3(0.5, 0.75, 0.9) * disc(uSun + toC * 1.25, 0.07) * 0.028;
+          f += vec3(0.8, 0.5, 0.9) * disc(uSun + toC * 1.6, 0.025) * 0.05;
+          f += vec3(0.6, 0.9, 0.6) * disc(uSun + toC * 2.0, 0.11) * 0.016;
+          f += uFlareColor * (1.0 - smoothstep(0.0, 0.02, abs(r - 0.42))) * 0.02;
+          c.rgb += f * k;
+        }
+      }
       float n = hash(vUv * 1024.0 + fract(uTime) * 91.7) - 0.5;
       c.rgb += n * uGrain;
       vec2 q = vUv - 0.5;
@@ -1190,6 +1233,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
 
   /* ---------- bar: a lacquered counter under a low canopy ---------- */
   const barLight = new THREE.PointLight('#ffb468', 0, 0, 2);
+  const barBeams = []; // one soft beam under each pendant
   let stripMat;
   {
     const { x, zFrom, zTo } = LAYOUT.bar;
@@ -1241,6 +1285,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
       stool.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x + 1.05, 0, z));
       placements.stools.push(new THREE.Matrix4().makeRotationY(rand() * Math.PI * 2).setPosition(x + 1.05, 0, z));
       lamps.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x, 2.5, z));
+      barBeams.push({ x, y: 2.44, z, rTop: 0.11, rBottom: 0.5, bottom: 1.12 });
       bulb(G_BAR, x, 2.53, z, 0.05);
       glows.add(x, 2.5, z, 0.7, G_BAR, '#ffb35f');
       pool(G_BAR, x + 0.05, 1.115, z, 0.55);
@@ -1369,6 +1414,20 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
   pools.forEach((list, gi) => { if (list.length) scene.add(new THREE.Mesh(mergeGeometries(list), poolMats[gi])); });
 
   const rainFx = buildRain({ scene, shared: fxShared, count: low ? 2600 : 7000 });
+
+  /* ---------- air and weather details (js/fx/atmos.js) ---------- */
+  const { x: hcx, z: hcz } = LAYOUT.hall;
+  const hallBeam = buildBeams({ scene, shared: fxShared, color: '#ffc27a', strength: 0.18,
+    cones: [{ x: hcx, y: 7.7, z: hcz, rTop: 2.1, rBottom: 3.5, bottom: 0.16 }], segments: low ? 24 : 48 });
+  const barBeam = buildBeams({ scene, shared: fxShared, color: '#ffb468', strength: 0.2, cones: barBeams, segments: low ? 12 : 20 });
+  // dust in the dawn light: desktop only (on the lighter version it cost more than it showed)
+  const dawnDust = buildMotes({ scene, shared: fxShared, count: low ? 1 : 900, box: [-9, 9, 0.3, 9, -6, 30], color: '#ffd9a8', size: 1.6, phase: 1 });
+  const hallDust = buildMotes({ scene, shared: fxShared, count: low ? 160 : 420, box: [hcx - 3.4, hcx + 3.4, 0.4, 7.4, hcz - 3.4, hcz + 3.4], color: '#ffcf8f', size: 1.4, phase: 0 });
+  const birds = buildBirds({ scene, shared: fxShared, count: low ? 12 : 18 });
+  const fireflies = buildFireflies({ scene, shared: fxShared, count: low ? 160 : 420,
+    regions: [[-46, -25.5, -150, 30], [25.5, 46, -150, 30], [-14, -4, 22, 56], [4, 14, 22, 56]] });
+  const puddles = buildPuddles({ scene, shared: fxShared, reflector,
+    rects: [[-0.1, 5.5, -101, -71], [-7, 7, -109.5, -101], [2, 8.5, -68, -42], [-6.5, -1, -40, -12]] });
   {
     const { x, zFrom, zTo } = LAYOUT.bar;
     rainFx.setRoof(new THREE.Vector3(x - 3.5, -1, zTo - 1.2), new THREE.Vector3(x + 2.7, 4.3, zFrom + 1.2));
@@ -1426,6 +1485,11 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
   // Desktop renders the scene into ScenePass's own multisampled target, so the
   // composer's buffers need no MSAA: every later full-screen pass would
   // otherwise render into, and resolve, a 4x target for nothing.
+  // Desktop renders the scene into ScenePass's own multisampled target, so the
+  // composer's buffers need no MSAA: every later full-screen pass would
+  // otherwise render into, and resolve, a 4x target for nothing. Phones render
+  // straight into a 2x buffer instead: ScenePass's extra copy costs them more
+  // than those resolves (measured on an Iris Xe).
   const depthChain = !low && isWebGL2;
   const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: isWebGL2 && !depthChain ? 2 : 0 });
   const composer = new EffectComposer(renderer, rt);
@@ -1451,6 +1515,10 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
   composer.addPass(new OutputPass());
   const grain = new ShaderPass(GrainShader);
   composer.addPass(grain);
+  if (scenePass) { grain.uniforms.tDepth.value = scenePass.depthTexture; grain.uniforms.uHasDepth.value = 1; }
+  // the lens flare's controls, in the grain pass (see GrainShader)
+  const flare = { set amount(v) { grain.uniforms.uFlare.value = v; }, get amount() { return grain.uniforms.uFlare.value; },
+    set occlusion(v) { grain.uniforms.uOcc.value = v; } };
 
   /* ---------- moods (pre-parsed) ---------- */
   const colourKeys = ['sunColor', 'hemiSky', 'hemiGround', 'fog'];
@@ -1489,7 +1557,6 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
     scene.fog.far = cur.fogFar;
     if (cur.env !== envKey) { envKey = cur.env; scene.environment = envs[envKey]; }
     scene.environmentIntensity = cur.envIntensity;
-    renderer.toneMappingExposure = cur.exposure;
     // Pay only for what the time of day shows: glow when it is visible (dusk
     // and night), shadow-map updates when the sun is strong enough to matter.
     bloom.strength = cur.bloom;
@@ -1522,6 +1589,12 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
       u.uAO.value = 0.55;
     }
     stars.visible = cur.stars > 0.01;
+    hallBeam.update(cur.festive);
+    barBeam.update(clamp01((cur.lamps - 0.3) / 0.7) * (1 - cur.festive * 0.6)); // beams only once it is dark enough to see them
+    dawnDust.update(low ? 0 : cur.rays * (1 - cur.rain), lightDir);
+    hallDust.update(cur.festive * 0.8);
+    fireflies.update(cur.fireflies);
+    puddles.update(cur.wet);
     for (const m of horizonHaze) { m.uniforms.uHaze.value.copy(cur.fog); m.uniforms.uAmount.value = 0.55 + 0.25 * clamp01(cur.mist * 2); }
 
     const L = cur.lamps, F = cur.festive, H = Math.max(F, L * 0.5);
@@ -1596,6 +1669,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
     renderer.setSize(w, h, false);
     composer.setPixelRatio(renderer.getPixelRatio());
     composer.setSize(w, h);
+    grain.uniforms.uAspect.value = w / h;
     bloom.resolution.set(Math.round(w * (low ? 0.35 : 0.5)), Math.round(h * (low ? 0.35 : 0.5)));
     camera.aspect = w / h;
     // On portrait screens the text panel covers the lower part of the view,
@@ -1613,6 +1687,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
     const scale = fullHeight / (2 * Math.tan(deg(camera.fov) / 2));
     glowMat.uniforms.uScale.value = scale;
     festive.material.uniforms.uScale.value = scale;
+    for (const o of [dawnDust, hallDust, fireflies]) o.uniforms.uScale.value = scale;
     const range = renderer.getContext().getParameter(renderer.getContext().ALIASED_POINT_SIZE_RANGE);
     glowMat.uniforms.uMax.value = Math.min(range ? range[1] : 256, 512);
     needsRender = true;
@@ -1649,7 +1724,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
     function renderScale80() { if (renderer.getPixelRatio() <= 0.81) return false; renderer.setPixelRatio(0.8); resize(); return true; },
     function renderScale67() { if (renderer.getPixelRatio() <= 0.68) return false; renderer.setPixelRatio(0.67); resize(); return true; },
   ];
-  if (debug) window.__scene = { renderer, scene, camera, sun, bloom, composer, reflector, clouds, depthFx, dof, sunMask, taa, grass, setTaa: (v) => { allowTaa = v; } };
+  if (debug) window.__scene = { renderer, scene, camera, sun, bloom, composer, reflector, clouds, depthFx, dof, sunMask, taa, grass, flare, birds, puddles, setTaa: (v) => { allowTaa = v; } };
   const steps = [];
   if (debug) window.__scene.adaptState = () => ({ steps: [...steps], median: +lastMedian.toFixed(1) });
   let lastMedian = 0;
@@ -1697,7 +1772,8 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
     updateOverlay();
     if (median < 0.028) { slowWindows = 0; return; }
     slowWindows++;
-    if (median < 0.045 && slowWindows < 2) return;
+    // one slow window can be a start-up hiccup: wait for a second, unless extreme
+    if (median < 0.07 && slowWindows < 2) return;
     slowWindows = 0;
     let drops = median >= 0.07 ? 3 : median >= 0.045 ? 2 : 1;
     while (drops > 0 && ladder.length) {
@@ -1728,6 +1804,32 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
   let last = performance.now();
   const right = new THREE.Vector3();
   let lastYaw = null, yawRate = 0;
+  let adaptedExposure = null;
+  // Lens flare: where the sun is on screen, and whether anything big hides it.
+  // Without the depth buffer (phones) a ray is cast at the gateway and
+  // buildings every few frames instead.
+  const sunDir = new THREE.Vector3(), sunNdc = new THREE.Vector3(), flareRay = new THREE.Raycaster();
+  const flareOccluders = shadowCasters.filter((o) => !o.isInstancedMesh);
+  let flareFrame = 0, flareOcc = 1;
+  function updateFlare() {
+    sunDir.copy(cloudUniforms.uSunDir.value).normalize();
+    const amount = cur.rays * clamp01(cur.skyElev / 4 + 0.5);
+    flare.amount = 0;
+    if (amount < 0.01) return;
+    sunNdc.copy(camera.position).addScaledVector(sunDir, 500).project(camera);
+    if (sunNdc.z > 1 || Math.abs(sunNdc.x) > 1.3 || Math.abs(sunNdc.y) > 1.3) return;
+    const edge = clamp01(1.25 - Math.max(Math.abs(sunNdc.x), Math.abs(sunNdc.y)) * 1.1);
+    grain.uniforms.uSun.value.set(sunNdc.x * 0.5 + 0.5, sunNdc.y * 0.5 + 0.5);
+    grain.uniforms.uFlareColor.value.copy(cur.sunColor);
+    if (!scenePass && flareFrame++ % 6 === 0) {
+      flareRay.set(camera.position, sunDir);
+      flareRay.far = 400;
+      const hit = flareRay.intersectObjects(flareOccluders, false).length > 0;
+      flareOcc += ((hit ? 0 : 1) - flareOcc) * 0.5;
+    }
+    flare.occlusion = flareOcc;
+    flare.amount = amount * edge * (scenePass ? 0.9 : 0.6);
+  }
   // ?debug&cam=x,y,z,lookX,lookY,lookZ pins the camera, for inspecting one spot
   const debugCam = debug && params.get('cam') ? params.get('cam').split(',').map(Number) : null;
 
@@ -1788,6 +1890,14 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
       fxShared.uTime.value = time;
       glowMat.uniforms.uTime.value = time;
       rainFx.update(camera.position, still ? 0 : cur.rain);
+      birds.update(time, still ? 0 : cur.birds);
+      // Eye adaptation: exposure follows the scene's with a lag, slower into
+      // the dark (~2 s) than into the light (~0.6 s), like eyes do. Walking into
+      // the bar it starts dim and opens up; stepping out it briefly glares.
+      if (still || adaptedExposure === null) adaptedExposure = cur.exposure;
+      else adaptedExposure += (cur.exposure - adaptedExposure) * (1 - Math.exp(-dt / (cur.exposure > adaptedExposure ? 2.2 : 0.6)));
+      renderer.toneMappingExposure = adaptedExposure;
+      updateFlare();
       poolFx.update(cur, lightDir, cur.sunColor, time);
       if (dof) dof.focus = pos.distanceTo(look);
       if (grass) grass.update(camera.position);
@@ -1808,7 +1918,15 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
   camera.lookAt(look);
   applyMood(p);
   placeSun();
-  renderer.compile(scene, camera);
+  // Compile every shader now, including things not yet shown (night-only
+  // fireflies, puddles, birds): otherwise each compiles the first time it
+  // appears, and the scroll hitches right then.
+  {
+    const hidden = [];
+    scene.traverse((o) => { if (!o.visible) { hidden.push(o); o.visible = true; } });
+    renderer.compile(scene, camera);
+    for (const o of hidden) o.visible = false;
+  }
   renderer.shadowMap.needsUpdate = true;
   render();
   updateOverlay();
@@ -1829,6 +1947,15 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
       for (const im of instancesOf(model, matrices, opts)) scene.add(im);
       for (const r of replaced || []) r.visible = false;
     };
+    // upholstery: a soft sheen at grazing angles, as leather and velvet have
+    chair?.traverse((o) => {
+      if (!o.isMesh) return;
+      const src = o.material, m = new THREE.MeshPhysicalMaterial();
+      THREE.MeshStandardMaterial.prototype.copy.call(m, src);
+      m.defines = { STANDARD: '', PHYSICAL: '' };
+      m.sheen = 0.55; m.sheenRoughness = 0.45; m.sheenColor = new THREE.Color('#e8d6c2');
+      o.material = m;
+    });
     swap(table, placements.tables, { height: 0.77 }, placements.replaced.restaurant.slice(0, 2));
     swap(chair, placements.chairs, { height: 0.97, rotY: 0 }, placements.replaced.restaurant.slice(2));
     // lanterns hang from the pergola: top at the beams, bulb inside
