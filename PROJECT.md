@@ -253,16 +253,17 @@ its stand-in stays. Phones download none of them. Credits in `models/README.md`.
   **off** — needs a measurement ID in `content.js`.
 
 **Waiting on Roshan:**
-1. **Google Search Console** — both Google service accounts on file are
-   refused permission to switch on the Site Verification API (tried 26 Sep
-   2026: the Play one in project `ezy-photo-uploader`, and the Firebase one
-   in `ourreminder-ea1bb`). Either Roshan clicks **Enable** on the Site
-   Verification API and the Search Console API in the `ezy-photo-uploader`
-   Cloud project, after which verification, adding him as owner and the
-   sitemap are done through the API; or he adds a *Domain* property himself
-   and sends the `google-site-verification=…` TXT value for Hostinger.
+1. ~~Google Search Console~~ — **done 26 Sep 2026**, see below.
 2. **Google Business Profile** — the largest single factor for local ranking.
 3. **GA4 measurement ID**, if analytics is wanted.
+
+**Google Search Console** (done 26 Sep 2026): domain property
+`sc-domain:yathvikplacemoodbidri.com`, verified by the DNS TXT record
+`google-site-verification=…` at Hostinger (**do not delete it** — removing it
+un-verifies the domain). Verified through the Site Verification API by the Play
+service account (`play-publisher@ezy-photo-uploader…`); owners are that account,
+`roshanshetty010100@gmail.com` and `vijayroshan63@gmail.com`. `sitemap.xml`
+submitted. Google usually takes a few days to show data.
 
 **Bing and other IndexNow engines** (26 Sep 2026): no account needed. The
 key file `c8ab7610d256c37bf0b4f7c2c3b659da.txt` is at the site root (public by design; do not delete it).
