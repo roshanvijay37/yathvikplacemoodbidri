@@ -21,6 +21,9 @@ and hosting. Read it before changing anything on the site.
 | `js/ui.js` | Markup builders (used by the build and the browser); scroll tracking |
 | `js/scene.js` | The 3D world (Three.js). Knows nothing about the text |
 | `js/chapters.js` | Camera stops, time-of-day moods and the scene layout per chapter |
+| `js/fx/life.js` | Wind in the palms, lamp flicker, the reflecting pool with floating diyas, rain, the hall's marigolds, stage and brass lamps |
+| `js/fx/passes.js` | Desktop post-processing: ambient occlusion, dawn light shafts, depth of field |
+| `js/fx/interaction.js` | Phone tilt to look around; the tap points in each chapter |
 | `textures/` | CC0 PBR textures for the 3D scene, desktop (`1k`) and phone (`512`) sizes |
 | `models/` | CC0 scanned furniture, lamps, plants and bottles (desktop only), credits in `models/README.md` |
 | `brand/` | Logo files — `mark.svg` is also the source of the 3D gateway and the favicon |
@@ -101,18 +104,35 @@ Photos appear as a swipeable strip inside the chapter's panel, on top of the
 - On desktop, scanned CC0 models from Poly Haven (1.3 MB, loaded after the
   scene is showing) replace the procedural chairs, tables, lamps, bar stools and
   bottles, and add potted plants. Phones keep the procedural versions.
+- Life: palms sway in the wind (harder in the rain), lamp and diya flames
+  flicker, a reflecting pool runs from the gateway to the plaza with clay diyas
+  floating on it, and a monsoon shower falls at dusk and at the bar, leaving the
+  marble wet and reflective. The hall is dressed for an event: marigold swags
+  and strands, a stage with drapes, and tall brass lamps.
+- Desktop only: ambient occlusion (contact shadows), light shafts through the
+  gateway at dawn, and depth of field focused on what the camera looks at.
+- Each chapter has a tap point (a pulsing dot) that opens a card with its call
+  button. On phones, tilting the phone looks around (iOS asks permission on
+  the first tap).
 - Each chapter pays only for what it shows: glow is off in daylight, and the
   shadow map stops updating at night when the moonlight is too faint to matter.
 - Three.js r170 is loaded from jsDelivr through the import map in
   `index.html`, only if the device supports WebGL.
 - Phones get 512 px textures (marble stays 1k), a 1024 shadow map, pixel ratio
   up to 1.5 and fewer palms and particles. If frames stay slow after start-up,
-  quality steps down in this order: marble reflections, pixel ratio, shadow-map
+  quality steps down in this order: depth of field, ambient occlusion, light
+  shafts, marble reflections, pixel ratio, shadow-map
   size, glow, pixel ratio 1, shadows. Add `?debug` to the URL to see frame times
   and each step on screen; `?debug&fixed` turns the step-downs off for measuring.
 - Without WebGL, a CSS gradient with the bronze mark stands in, changing colour
   per chapter. With "reduce motion" switched on, the camera cuts between
-  chapters instead of gliding, and nothing drifts.
+  chapters instead of gliding, nothing drifts, the rain is hidden and tilt is
+  off.
+- Not used, on purpose: GPU-compressed (KTX2) textures. The phone textures are
+  about 130 KB as JPEG; the Basis transcoder KTX2 needs is about 500 KB, so it
+  would slow the phone load to save GPU memory the phones are not short of.
+  No scanned people either — there are no CC0 scans good enough to not look
+  uncanny.
 
 ## Running locally
 

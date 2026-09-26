@@ -218,6 +218,25 @@ its stand-in stays. Phones download none of them. Credits in `models/README.md`.
 - Checked in headless desktop Chrome on this PC's Intel GPU, 1440×900 and
   412×741 phone emulation. Not yet tested on a real phone.
 
+### Living scene (26 Sep 2026)
+
+- Palms move in the wind; lamp, diya and brass-lamp flames flicker.
+- A reflecting pool along the approach, with 14 floating clay diyas.
+- Monsoon rain at dusk and at the bar, with wet, reflective marble (none under
+  the bar canopy).
+- Hall dressed for an event: marigold swags between the arches, strands from
+  the chandelier ring, a stage with cream drapes, brass standing lamps.
+- Desktop: ambient occlusion, light shafts through the gateway at dawn, depth
+  of field.
+- Tap points per chapter open a card with the call button; phones can look
+  around by tilting.
+- Skipped on purpose: people (no convincing CC0 scans), baked lighting (the
+  scene is generated at load, so real-time ambient occlusion is used instead),
+  KTX2 textures (the transcoder would outweigh the textures it compresses).
+- Checked in headless Chrome on this PC's Intel GPU at 1440×900 and 390×844
+  phone emulation (low tier), and with reduced motion; frame diffs confirm the
+  wind and flicker move. **Tilt and all of this on a real phone are untested.**
+
 ### SEO (23 Sep 2026)
 
 - All text, links and structured data are written into the HTML by
