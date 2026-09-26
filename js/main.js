@@ -58,6 +58,8 @@ async function start3D() {
       quality: quality(),
       reducedMotion,
       getProgress: ui.progress,
+      // tap points reuse each chapter's own title and call button text
+      hotspots: content.chapters.map((ch, i) => ({ id: ch.id, chapter: i + 1, label: ch.title, action: ch.action, tel: content.phones[0].tel })),
     });
     document.body.classList.add('has-3d');
   } catch (err) {
