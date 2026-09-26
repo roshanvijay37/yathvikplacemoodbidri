@@ -253,14 +253,27 @@ its stand-in stays. Phones download none of them. Credits in `models/README.md`.
   **off** — needs a measurement ID in `content.js`.
 
 **Waiting on Roshan:**
-1. **Google Search Console** — add a *Domain* property for
-   `yathvikplacemoodbidri.com` and send the `google-site-verification=…` TXT
-   value; it is then added at Hostinger. (Automatic verification through the
-   Play service account was tried and is blocked: that account cannot enable
-   the Site Verification API.) Then submit `sitemap.xml`, and import the
-   property into Bing Webmaster Tools.
+1. **Google Search Console** — both Google service accounts on file are
+   refused permission to switch on the Site Verification API (tried 26 Sep
+   2026: the Play one in project `ezy-photo-uploader`, and the Firebase one
+   in `ourreminder-ea1bb`). Either Roshan clicks **Enable** on the Site
+   Verification API and the Search Console API in the `ezy-photo-uploader`
+   Cloud project, after which verification, adding him as owner and the
+   sitemap are done through the API; or he adds a *Domain* property himself
+   and sends the `google-site-verification=…` TXT value for Hostinger.
 2. **Google Business Profile** — the largest single factor for local ranking.
 3. **GA4 measurement ID**, if analytics is wanted.
+
+**Bing and other IndexNow engines** (26 Sep 2026): no account needed. The
+key file `c8ab7610d256c37bf0b4f7c2c3b659da.txt` is at the site root (public by design; do not delete it).
+After a change, tell them with:
+
+```bash
+curl -H 'Content-Type: application/json' https://api.indexnow.org/indexnow   -d '{"host":"yathvikplacemoodbidri.com","key":"c8ab7610d256c37bf0b4f7c2c3b659da","urlList":["https://yathvikplacemoodbidri.com/"]}'
+```
+
+First ping accepted (HTTP 202). Bing Webmaster Tools can still be added later
+for reports, by importing the Google property.
 
 ## Editing the site
 
