@@ -22,8 +22,12 @@ and hosting. Read it before changing anything on the site.
 | `js/scene.js` | The 3D world (Three.js). Knows nothing about the text |
 | `js/chapters.js` | Camera stops, time-of-day moods and the scene layout per chapter |
 | `js/fx/life.js` | Wind in the palms, lamp flicker, the reflecting pool with floating diyas, rain, the hall's marigolds, stage and brass lamps |
-| `js/fx/passes.js` | Desktop post-processing: ambient occlusion, dawn light shafts, depth of field |
+| `js/fx/passes.js` | Desktop post-processing: ambient occlusion, dawn light shafts, depth of field, temporal anti-aliasing |
 | `js/fx/interaction.js` | Phone tilt to look around; the tap points in each chapter |
+| `js/fx/grass.js` | Blades of grass around the camera (desktop) |
+| `js/fx/shadows.js` | Contact-hardening sun shadows (desktop) |
+| `js/sound.js` | Ambient sound: the speaker button and the per-chapter mix |
+| `sounds/` | The five ambient loops; credits in `sounds/credits.html` (linked from the footer) and `sounds/README.md` |
 | `textures/` | CC0 PBR textures for the 3D scene, desktop (`1k`) and phone (`512`) sizes |
 | `models/` | CC0 scanned furniture, lamps, plants and bottles (desktop only), credits in `models/README.md` |
 | `brand/` | Logo files — `mark.svg` is also the source of the 3D gateway and the favicon |
@@ -109,8 +113,21 @@ Photos appear as a swipeable strip inside the chapter's panel, on top of the
   floating on it, and a monsoon shower falls at dusk and at the bar, leaving the
   marble wet and reflective. The hall is dressed for an event: marigold swags
   and strands, a stage with drapes, and tall brass lamps.
-- Desktop only: ambient occlusion (contact shadows), light shafts through the
-  gateway at dawn, and depth of field focused on what the camera looks at.
+- Desktop only: ambient occlusion, light shafts through the gateway at dawn,
+  depth of field focused on what the camera looks at, temporal anti-aliasing
+  (no shimmer on fronds and railings), shadows that are sharp where an object
+  meets the ground and softer further off (PCSS), and real blades of grass
+  near the camera.
+- Palms have V-folded fronds, a few dead ones, coconuts and a flared base.
+  Beyond the lawn: a belt of coconut and areca plantations and broadleaf
+  trees, and low wooded hills fading into the haze (generic Dakshina Kannada
+  country, not the real skyline).
+- The camera moves like it is carried: slow breathing, small corrections, and
+  a lean into turns.
+- Sound, off until the speaker button in the header is tapped (nothing
+  downloads before that): birds at dawn, a dining room, rain and crickets in the
+  evening, rain at the bar, nadaswaram and thavil in the hall. The mix follows
+  the scroll; see `js/sound.js`.
 - Each chapter has a tap point (a pulsing dot) that opens a card with its call
   button. On phones, tilting the phone looks around (iOS asks permission on
   the first tap).
@@ -118,21 +135,32 @@ Photos appear as a swipeable strip inside the chapter's panel, on top of the
   shadow map stops updating at night when the moonlight is too faint to matter.
 - Three.js r170 is loaded from jsDelivr through the import map in
   `index.html`, only if the device supports WebGL.
-- Phones get 512 px textures (marble stays 1k), a 1024 shadow map, pixel ratio
-  up to 1.5 and fewer palms and particles. If frames stay slow after start-up,
-  quality steps down in this order: depth of field, ambient occlusion, light
-  shafts, marble reflections, pixel ratio, shadow-map
-  size, glow, pixel ratio 1, shadows. Add `?debug` to the URL to see frame times
-  and each step on screen; `?debug&fixed` turns the step-downs off for measuring.
+- Two versions. The full one (scanned furniture, grass, mirror marble and the
+  desktop-only effects above) goes only to large screens whose browser names a
+  discrete or high-end GPU (NVIDIA, Radeon RX/Pro, Intel Arc, Apple M-series
+  Pro/Max/Ultra). Everything else — phones, and laptops on integrated
+  graphics — gets the lighter one: 512 px textures (marble stays 1k), a 1024
+  shadow map, pixel ratio up to 1.5, fewer palms and particles. Measured on an
+  Intel Iris Xe laptop at 1440x900: the full version ran near 10 frames a
+  second before stepping down, the lighter one about 55.
+- If frames are slow after start-up, quality steps down, judged every second
+  (several steps at once when very slow): grass, ambient occlusion, marble
+  reflections, light shafts, depth of field, anti-aliasing, pixel ratio,
+  shadow-map size, glow, pixel ratio 1, shadows, then 80% and 67% render scale.
+  `?debug` shows frame times and each step; `?debug&fixed` turns the steps off
+  for measuring; `?debug&tier=high|low` forces a version; `?debug&cam=x,y,z,lx,ly,lz`
+  pins the camera; `?debug&tm=agx|neutral` and `?debug&pcf` compare tone
+  mapping and the older shadow filter.
 - Without WebGL, a CSS gradient with the bronze mark stands in, changing colour
   per chapter. With "reduce motion" switched on, the camera cuts between
-  chapters instead of gliding, nothing drifts, the rain is hidden and tilt is
-  off.
+  chapters instead of gliding, nothing drifts, the rain is hidden, tilt and
+  the carried-camera motion are off.
 - Not used, on purpose: GPU-compressed (KTX2) textures. The phone textures are
   about 130 KB as JPEG; the Basis transcoder KTX2 needs is about 500 KB, so it
   would slow the phone load to save GPU memory the phones are not short of.
   No scanned people either — there are no CC0 scans good enough to not look
-  uncanny.
+  uncanny. Tone mapping stays ACES: AgX and Neutral were compared on every
+  chapter; AgX turned the bar muddy, Neutral blew out its lamps.
 
 ## Running locally
 

@@ -237,6 +237,42 @@ its stand-in stays. Phones download none of them. Credits in `models/README.md`.
   phone emulation (low tier), and with reduced motion; frame diffs confirm the
   wind and flicker move. **Tilt and all of this on a real phone are untested.**
 
+### Realism pass 3 and sound (26 Sep 2026)
+
+- **Desktop:** temporal anti-aliasing, contact-hardening shadows, grass
+  blades near the camera. **Everywhere:** fuller palms (dead fronds,
+  coconuts), a plantation treeline and hills on the horizon, a hand-carried
+  camera feel.
+- **Sound:** off by default; a speaker button in the header. Five loops cut
+  from Wikimedia Commons recordings (dawn birds recorded at Sakleshpur;
+  nadaswaram and thavil from a temple Deeparadhana), credited on
+  `sounds/credits.html`, linked from the footer. Three are CC BY-SA, one CC
+  BY — keep that page if the sounds stay. **Nobody has listened to the mix:**
+  levels and seams were checked by measurement only.
+- **Which version a visitor gets** now depends on the GPU the browser reports
+  (see README "The 3D scene"). This laptop (Intel Iris Xe) gets the lighter
+  version; `?debug&tier=high` shows the full one. Measured here in a real
+  Chrome window, not on a phone.
+- Checked: both versions at 1440x900 and 390x844, reduced motion, 360 px
+  header, sound switching and mix per chapter, no console errors.
+  **Not checked:** any real phone, Safari/iOS (sound, tilt), a machine with a
+  dedicated GPU.
+
+### Showing the real place (waiting on Roshan)
+
+The 3D scene is an invented layout built from the logo. The biggest step
+towards realism is a capture of the actual property:
+
+1. **Video walk-through for a 3D capture** — a slow, steady walk around the
+   building and grounds on a phone, in soft daylight. Apps such as Polycam or
+   Luma AI turn such video into a photoreal 3D capture ("Gaussian splat")
+   that a web page can show. Not tried from here: the result and the steps
+   need testing together.
+2. **Photos of the real materials** (facade, floor, bar counter, hall
+   ceiling) — to rebuild the textures so the scene wears the real finishes.
+3. **Front, side and entrance photos** — to reshape the building to the real
+   proportions.
+
 ### SEO (23 Sep 2026)
 
 - All text, links and structured data are written into the HTML by
