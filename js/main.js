@@ -3,9 +3,12 @@
 
 import { content } from '../content.js';
 import { renderPage } from './ui.js';
+import { startSound } from './sound.js';
 
 const ui = renderPage(content);
 startAnalytics(content.analytics);
+// a speaker button; nothing plays or downloads until it is tapped
+startSound({ getProgress: ui.progress });
 
 // Google Analytics 4, only if a measurement ID is set in content.js. Taps on
 // any link marked data-track (Call, Directions) are sent as events, tagged

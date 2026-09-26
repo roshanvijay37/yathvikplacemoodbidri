@@ -313,6 +313,31 @@ main { position: relative; z-index: 1; }
   .chapter--hero .sticky::before { height: 100%; background: rgba(251, 247, 241, .82); }
 }
 
+/* ---------- ambient sound switch ---------- */
+
+.sound-toggle {
+  order: 1; flex: none;
+  width: 40px; height: 40px; display: grid; place-items: center; padding: 0;
+  border: 1px solid rgba(152, 102, 51, .35); border-radius: 50%;
+  background: none; color: inherit; cursor: pointer; touch-action: manipulation;
+  transition: color .25s ease, border-color .25s ease, background-color .25s ease;
+}
+.menu-btn { order: 2; }
+.sound-toggle svg { width: 20px; height: 20px; fill: currentColor; }
+.sound-toggle:hover { background: rgba(152, 102, 51, .1); }
+.sound-toggle.is-on { color: var(--bronze); border-color: var(--bronze); }
+body[data-mood="night"] .sound-toggle.is-on { color: var(--bronze-light); border-color: var(--bronze-light); }
+.sound-toggle.is-loading svg { animation: sound-wait 1s ease-in-out infinite alternate; }
+@keyframes sound-wait { to { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .sound-toggle.is-loading svg { animation: none; } }
+@media (min-width: 900px) { .sound-toggle { order: 0; } }
+@media (max-width: 899px) { .top { gap: 10px; } .sound-toggle { width: 38px; height: 38px; } }
+/* narrow phones: the menu keeps its icon; the word stays for screen readers */
+@media (max-width: 374px) {
+  .menu-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+.foot .foot-small { color: var(--muted-night); text-decoration: underline; text-underline-offset: 3px; }
+
 /* ---------- tap points in the 3D scene ---------- */
 
 .hotspots { position: fixed; inset: 0; z-index: 5; pointer-events: none; }

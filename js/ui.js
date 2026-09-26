@@ -98,7 +98,7 @@ export function footerHTML(c) {
     + `<p>${esc(c.footer.note)}</p>`
     + `<p>${esc(c.address.oneLine)}</p>`
     + `<p>${c.phones.map((p) => `<a href="tel:${esc(p.tel)}" data-track="call" data-where="footer">${esc(p.display)}</a>`).join(' · ')}</p>`
-    + `<p>© ${esc(c.footer.year)} <span translate="no">${esc(c.name)}</span></p>`;
+    + `<p>© ${esc(c.footer.year)} <span translate="no">${esc(c.name)}</span> · <a class="foot-small" href="sounds/credits.html">Sound credits</a></p>`;
 }
 
 // ---- Browser: fill anything the build did not, then wire up behaviour.
