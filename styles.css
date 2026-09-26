@@ -68,7 +68,7 @@ p { text-wrap: pretty; }
 /* ---------- stage: 3D canvas or CSS fallback ---------- */
 
 .stage { position: fixed; inset: 0; height: 100vh; height: 100lvh; z-index: 0; overflow: hidden; }
-.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .9s ease; }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 1.4s ease; }
 body.has-3d .stage canvas { opacity: 1; }
 
 .fallback {
@@ -77,7 +77,20 @@ body.has-3d .stage canvas { opacity: 1; }
   background: linear-gradient(to bottom, var(--sky-a) 0%, var(--sky-b) 62%, var(--sky-b) 100%);
   transition: --sky-a 1s ease, --sky-b 1s ease, opacity .9s ease;
 }
-.fallback img { width: min(46vmin, 320px); height: auto; margin-bottom: 42vh; opacity: .92; transition: filter 1s ease; }
+/* Opening: the bronze mark draws its outline, then fills, while the 3D scene
+   loads behind it; the scene fades up once the drawing is done. */
+.fallback .reveal {
+  width: min(46vmin, 320px); height: auto; margin-bottom: 42vh; overflow: visible;
+  fill: var(--bronze); fill-opacity: 0; stroke: var(--bronze); stroke-width: 1.6; stroke-linejoin: round;
+  stroke-dasharray: 1; stroke-dashoffset: 1;
+  animation: mark-draw 2s cubic-bezier(.55, 0, .2, 1) .1s forwards, mark-fill 1.1s ease 1.5s forwards;
+  transition: filter 1s ease;
+}
+@keyframes mark-draw { to { stroke-dashoffset: 0; } }
+@keyframes mark-fill { to { fill-opacity: .92; stroke-opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .fallback .reveal { animation: none; fill-opacity: .92; stroke: none; }
+}
 body.has-3d .fallback { opacity: 0; }
 
 body[data-chapter="0"] { --sky-a: #b8c1cc; --sky-b: #f5dcc2; }
@@ -86,7 +99,7 @@ body[data-chapter="2"] { --sky-a: #565a78; --sky-b: #f0a466; }
 body[data-chapter="3"] { --sky-a: #07060a; --sky-b: #2a1c12; }
 body[data-chapter="4"] { --sky-a: #120b08; --sky-b: #4a2a14; }
 body[data-chapter="5"] { --sky-a: #0a0808; --sky-b: #2d1d11; }
-body[data-mood="night"] .fallback img { filter: brightness(1.25) drop-shadow(0 0 28px rgba(201, 154, 102, .45)); }
+body[data-mood="night"] .fallback .reveal { filter: brightness(1.25) drop-shadow(0 0 28px rgba(201, 154, 102, .45)); }
 
 /* ---------- header ---------- */
 
@@ -392,7 +405,7 @@ body[data-mood="night"] .sound-toggle.is-on { color: var(--bronze-light); border
   .top-directions { background: transparent; color: inherit; border-color: currentColor; }
   .top-directions:hover { background: rgba(152, 102, 51, .12); border-color: currentColor; }
   .callbar { display: none; }
-  .fallback img { margin-bottom: 8vh; margin-left: 38vw; }
+  .fallback .reveal { margin-bottom: 8vh; margin-left: 38vw; }
   .sticky { align-items: center; justify-content: flex-start; padding: calc(var(--top-h) + 32px) max(40px, 6vw) 40px; }
   .chapter--hero .sticky { justify-content: center; align-items: flex-end; padding-bottom: 7vh; }
   .chapter--visit .sticky { justify-content: flex-end; }

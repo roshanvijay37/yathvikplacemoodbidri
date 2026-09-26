@@ -84,6 +84,8 @@ async function start3D() {
       // tap points reuse each chapter's own title and call button text
       hotspots: content.chapters.map((ch, i) => ({ id: ch.id, chapter: i + 1, label: ch.title, action: ch.action, tel: content.phones[0].tel })),
     });
+    // let the opening draw of the mark finish before the scene fades up over it
+    if (!reducedMotion.matches) await new Promise((r) => setTimeout(r, Math.max(0, 2500 - performance.now())));
     document.body.classList.add('has-3d');
   } catch (err) {
     // The CSS fallback stays in place; the page works without the scene.
