@@ -14,15 +14,17 @@
 
 import * as THREE from 'three';
 import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
-import { mergeGeometries as mergeRaw } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries as mergeRaw, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { ScenePass, DepthFxPass, DofPass, SunMask } from './fx/passes.js';
+import { ScenePass, DepthFxPass, DofPass, SunMask, TaaPass } from './fx/passes.js';
 import { addWind, addFlicker, buildPool, buildRain, buildHallDecor } from './fx/life.js';
 import { startTilt, createHotspots } from './fx/interaction.js';
+import { useContactShadows } from './fx/shadows.js';
+import { buildGrass } from './fx/grass.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -200,73 +202,123 @@ function trunkTexture() {
   return t;
 }
 
-// One palm frond: a rib with leaflets angled towards the tip (alpha cut-out).
-function frondTexture() {
-  return canvasTexture(256, 64, (ctx, w, h) => {
+// Palms draw from their own random sequence, then burn as many numbers from
+// the shared one as the first version did, so everything placed after them
+// (palm spots, lamps, furniture) stays exactly where it was.
+const prng = (s0) => { let st = s0; return () => ((st = (st * 16807) % 2147483647) - 1) / 2147483646; };
+const burn = (n) => { for (let i = 0; i < n; i++) rand(); };
+
+// One palm frond, seen flat: a rib with drooping leaflets on both sides, some
+// missing, tips thinning out (alpha cut-out). Greyscale: each frond's colour
+// comes from its vertex colour, so green and dead fronds share one texture.
+function frondTexture(balance = true) {
+  const r = prng(4242);
+  const t = canvasTexture(512, 128, (ctx, w, h) => {
     ctx.clearRect(0, 0, w, h);
     ctx.lineCap = 'round';
-    for (let x = 4; x < w - 4; x += 3) {
-      const len = (h / 2 - 2) * (0.55 + 0.45 * Math.sin((x / w) * Math.PI));
-      const g = 90 + Math.floor(rand() * 60);
-      ctx.strokeStyle = `rgb(${Math.floor(g * 0.55)},${g},${Math.floor(g * 0.35)})`;
-      ctx.lineWidth = 1.6;
+    for (let x = 6; x < w - 4; x += 3.2) {
+      const along = x / w;
+      const len = (h / 2 - 3) * (0.5 + 0.5 * Math.sin(along * Math.PI)) * (0.85 + r() * 0.3);
       for (const dir of [-1, 1]) {
+        if (r() < 0.06) continue; // a torn or missing leaflet
+        const g = 150 + Math.floor(r() * 80);
+        ctx.strokeStyle = `rgb(${g},${g},${Math.floor(g * 0.92)})`;
+        ctx.lineWidth = 2.2 - along * 0.8;
         ctx.beginPath();
         ctx.moveTo(x, h / 2);
-        ctx.lineTo(Math.min(w, x + len * 0.9), h / 2 + dir * len);
+        // leaflets sweep towards the tip and curve down at their ends
+        ctx.quadraticCurveTo(x + len * 0.35, h / 2 + dir * len * 0.7, Math.min(w - 1, x + len * 0.75), h / 2 + dir * len);
         ctx.stroke();
       }
     }
-    ctx.strokeStyle = '#6d6a3a';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgb(200,190,150)';
+    ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
   });
+  t.anisotropy = 4;
+  if (balance) burn(83);
+  return t;
 }
 
-// A palm 1 unit tall: a gently curved, tapering trunk and a crown of drooping
-// fronds. Scaled per instance to 8-14 m.
-function palmGeometries(low) {
+// A palm 1 unit tall: a gently curved, tapering trunk with a flared base, a
+// crown of V-folded fronds (the leaflets hang either side of the rib), a few
+// dead fronds hanging against the trunk, and a cluster of coconuts. Scaled
+// per instance to 8-14 m.
+function palmGeometries(low, balance = true, far = false) {
+  const r = prng(777);
   const lean = 0.08;
   const path = new THREE.CatmullRomCurve3([
     new THREE.Vector3(0, 0, 0), new THREE.Vector3(lean * 0.2, 0.35, 0),
     new THREE.Vector3(lean * 0.6, 0.7, 0), new THREE.Vector3(lean, 1, 0),
   ]);
-  const trunkGeo = new THREE.TubeGeometry(path, low ? 8 : 16, 0.016, low ? 5 : 8, false);
+  const trunkGeo = new THREE.TubeGeometry(path, far ? 4 : low ? 10 : 16, 0.016, far ? 4 : low ? 6 : 8, false);
   const p = trunkGeo.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const y = p.getY(i);
     const c = path.getPoint(Math.min(1, Math.max(0, y)));
-    const k = 1.25 - 0.45 * y; // taper towards the top
+    const k = 1.25 - 0.45 * y + 0.9 * Math.exp(-y * 28); // taper, and a flared base
     p.setX(i, c.x + (p.getX(i) - c.x) * k);
     p.setZ(i, c.z + (p.getZ(i) - c.z) * k);
   }
+  trunkGeo.computeVertexNormals();
   scaleUV(trunkGeo, 3, 18);
+
   const crown = new THREE.Vector3(lean, 1, 0);
   const fronds = [];
-  const n = low ? 9 : 13;
-  for (let k = 0; k < n; k++) {
-    const segs = low ? 5 : 8, L = 0.3 + rand() * 0.08, droop = 0.12 + rand() * 0.14, rise = 0.1 + rand() * 0.06;
-    const pos = [], uv = [], idx = [];
+  const frond = (L, rise, droop, tiltX, yaw, colour, segs) => {
+    const pos = [], uv = [], at = [], col = [], idx = [];
     for (let i = 0; i <= segs; i++) {
       const t = i / segs;
       const x = t * L, y = rise * t - droop * t * t;
-      const half = 0.05 * Math.sin(Math.PI * Math.min(1, t * 1.15 + 0.05));
-      pos.push(x, y, -half, x, y, half);
-      uv.push(t, 0, t, 1);
-      if (i < segs) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+      const half = 0.06 * Math.sin(Math.PI * Math.min(1, t * 1.1 + 0.06));
+      const fold = half * 0.55; // leaflets hang below the rib
+      pos.push(x, y - fold, -half, x, y, 0, x, y - fold, half);
+      uv.push(t, 0, t, 0.5, t, 1);
+      at.push(t, t, t);
+      for (let v = 0; v < 3; v++) col.push(colour.r, colour.g, colour.b);
+      if (i < segs) {
+        const a = i * 3;
+        idx.push(a, a + 1, a + 3, a + 1, a + 4, a + 3, a + 1, a + 2, a + 4, a + 2, a + 5, a + 4);
+      }
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-    g.setAttribute('aT', new THREE.Float32BufferAttribute(uv.filter((_, i) => i % 2 === 0), 1)); // 0 at base, 1 at tip (wind)
+    g.setAttribute('aT', new THREE.Float32BufferAttribute(at, 1)); // 0 at base, 1 at tip (wind)
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     g.setIndex(idx);
-    g.rotateX((rand() - 0.5) * 0.6);
-    g.rotateY((k / n) * Math.PI * 2 + rand() * 0.3);
+    g.rotateX(tiltX);
+    g.rotateY(yaw);
     g.translate(crown.x, crown.y, crown.z);
     g.computeVertexNormals();
     fronds.push(g);
+  };
+  const green = new THREE.Color();
+  const n = far ? 9 : low ? 14 : 20, segs = far ? 3 : low ? 6 : 8;
+  for (let k = 0; k < n; k++) {
+    // young fronds stand up in the middle; older ones arch out and droop
+    const age = k / n;
+    const L = 0.34 + r() * 0.1, rise = 0.24 - age * 0.14 + r() * 0.05, droop = 0.1 + age * 0.3 + r() * 0.08;
+    green.setRGB(0.2 + r() * 0.06, 0.34 + r() * 0.08 - age * 0.04, 0.08 + r() * 0.03);
+    frond(L, rise, droop, (r() - 0.5) * 0.5, (k / n) * Math.PI * 2 * 2.618 + r() * 0.3, green, segs);
   }
-  return { trunkGeo, frondGeo: mergeGeometries(fronds) };
+  const dead = new THREE.Color();
+  for (let k = 0; k < (far ? 0 : low ? 1 : 2); k++) {
+    dead.setRGB(0.26 + r() * 0.05, 0.17 + r() * 0.03, 0.08);
+    frond(0.22 + r() * 0.04, -0.06, 0.5 + r() * 0.1, (r() - 0.5) * 0.3, r() * Math.PI * 2, dead, segs);
+  }
+
+  // coconuts, bunched just under the crown
+  const nuts = [];
+  for (let k = 0; k < (far ? 0 : low ? 5 : 7); k++) {
+    const a = r() * Math.PI * 2, rr = 0.016 + r() * 0.01;
+    const g = new THREE.IcosahedronGeometry(0.0105 + r() * 0.002, 0);
+    g.scale(1, 1.15, 1);
+    g.translate(crown.x + Math.cos(a) * rr, crown.y - 0.025 - r() * 0.02, crown.z + Math.sin(a) * rr);
+    nuts.push(g);
+  }
+  if (balance) burn(low ? 45 : 65);
+  return { trunkGeo, frondGeo: mergeGeometries(fronds), nutGeo: nuts.length ? mergeGeometries(nuts) : null };
 }
 
 // Soft blotchy alpha for low mist layers.
@@ -525,9 +577,14 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
   // Sharp-screen phones start at 2x; the quality ladder lowers it if frames are slow.
   const screenDpr = window.devicePixelRatio || 1;
   renderer.setPixelRatio(Math.min(screenDpr, low ? (screenDpr >= 2.5 ? 2 : 1.5) : 2));
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  const params = new URLSearchParams(location.search);
+  const TONE = { aces: THREE.ACESFilmicToneMapping, agx: THREE.AgXToneMapping, neutral: THREE.NeutralToneMapping };
+  // ACES chosen after comparing AgX and Neutral on every chapter (?debug&tm=agx|neutral)
+  renderer.toneMapping = (params.has('debug') && TONE[params.get('tm')]) || THREE.ACESFilmicToneMapping;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // desktop: shadows sharp at contact and softer with distance (PCSS)
+  if (!low && renderer.capabilities.isWebGL2 && !(params.has('debug') && params.has('pcf'))) useContactShadows(renderer);
   host.appendChild(renderer.domElement);
   const isWebGL2 = renderer.capabilities.isWebGL2;
   const maxAniso = Math.min(renderer.capabilities.getMaxAnisotropy(), low ? 4 : 8);
@@ -706,8 +763,16 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
     scene.add(reflector);
   }
   flat(scaleUV(new THREE.PlaneGeometry(7, 60), 7 / 1.5, 60 / 1.5), marble, 0, PLAZA.zNear + 30).position.y = 0.002;
-  const lawnMat = new THREE.MeshStandardMaterial({ map: grassTexture(), color: '#a39e86', roughness: 1, metalness: 0 });
+  const lawnMat = new THREE.MeshStandardMaterial({ map: grassTexture(), color: '#c9c19c', roughness: 1, metalness: 0 });
   flat(scaleUV(new THREE.PlaneGeometry(1400, 1400), 1400 / 4, 1400 / 4), lawnMat, 0, -60).position.y = -0.01;
+  // Desktop: real blades of grass near the camera, fading into the lawn texture.
+  const grass = low ? null : buildGrass({
+    scene, shared: fxShared, rand,
+    paved: [[-PLAZA.x - 0.45, PLAZA.x + 0.45, PLAZA.zFar - 0.45, PLAZA.zNear + 0.45], [-3.7, 3.7, PLAZA.zNear, PLAZA.zNear + 60.3]],
+  });
+  // Layer 3 is seen by the main camera only: the marble mirror (layer 0) would
+  // otherwise draw a million blades again for a reflection no one can see.
+  if (grass) { grass.mesh.layers.set(3); camera.layers.enable(3); }
   scene.add(cast(new THREE.Mesh(mergeGeometries([
     box(plazaW + 0.6, 0.12, 0.3, 0, 0.06, PLAZA.zFar, 1.5),
     box(0.3, 0.12, plazaL, -PLAZA.x, 0.06, (PLAZA.zNear + PLAZA.zFar) / 2, 1.5),
@@ -718,7 +783,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
 
   // Coconut palms on the lawn around the plaza.
   {
-    const { trunkGeo, frondGeo } = palmGeometries(low);
+    const { trunkGeo, frondGeo, nutGeo } = palmGeometries(low);
     const spots = [];
     const tries = low ? 70 : 150;
     for (let i = 0; i < tries; i++) {
@@ -727,8 +792,10 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
       spots.push([x, z]);
     }
     for (let i = 0; i < (low ? 8 : 16); i++) spots.push([(rand() - 0.5) * 90, PLAZA.zFar - 6 - rand() * 60]);
-    const trunks = new THREE.InstancedMesh(trunkGeo, new THREE.MeshStandardMaterial({ map: trunkTexture(), color: '#8a735e', roughness: 1 }), spots.length);
-    const fronds = new THREE.InstancedMesh(frondGeo, new THREE.MeshStandardMaterial({ map: frondTexture(), alphaTest: 0.5, side: THREE.DoubleSide, color: '#b7c69a', roughness: 0.75 }), spots.length);
+    const trunkMap = trunkTexture();
+    const trunks = new THREE.InstancedMesh(trunkGeo, new THREE.MeshStandardMaterial({ map: trunkMap, color: '#c2b29c', roughness: 1, ...(hi && { bumpMap: trunkMap, bumpScale: 2.5 }) }), spots.length);
+    const fronds = new THREE.InstancedMesh(frondGeo, new THREE.MeshStandardMaterial({ map: frondTexture(), alphaTest: 0.5, side: THREE.DoubleSide, vertexColors: true, roughness: 0.7 }), spots.length);
+    const nuts = new THREE.InstancedMesh(nutGeo, new THREE.MeshStandardMaterial({ color: '#5f6428', roughness: 0.55 }), spots.length);
     const q = new THREE.Quaternion(), m = new THREE.Matrix4();
     spots.forEach(([x, z], i) => {
       const h = 8 + rand() * 6;
@@ -736,12 +803,105 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
       m.compose(new THREE.Vector3(x, 0, z), q, new THREE.Vector3(h, h, h));
       trunks.setMatrixAt(i, m);
       fronds.setMatrixAt(i, m);
+      nuts.setMatrixAt(i, m);
     });
     addWind(trunks.material, fxShared, 'trunk');
     addWind(fronds.material, fxShared, 'frond');
-    trunks.layers.enable(2);
-    fronds.layers.enable(2);
-    scene.add(trunks, fronds);
+    addWind(nuts.material, fxShared, 'trunk');
+    for (const o of [trunks, fronds, nuts]) o.layers.enable(2);
+    scene.add(trunks, fronds, nuts);
+  }
+
+  // The horizon: coconut and areca plantations and broadleaf trees in a belt
+  // beyond the lawn, and low wooded hills far off, fading into the haze.
+  // Generic Dakshina Kannada country, not a model of the real skyline.
+  const horizonHaze = [];
+  {
+    const r = prng(9001);
+    const { trunkGeo, frondGeo } = palmGeometries(true, false, true);
+    const farPalms = [];
+    const count = low ? 200 : 420;
+    for (let i = 0; i < count; i++) {
+      const a = r() * Math.PI * 2, d = 110 + r() * 190;
+      const x = Math.cos(a) * d, z = -60 + Math.sin(a) * d * 1.2;
+      if (Math.abs(x) < PLAZA.x + 60 && z > PLAZA.zFar - 60 && z < 60) continue;
+      farPalms.push([x, z, 9 + r() * 7]);
+    }
+    const fm = new THREE.Matrix4(), fq = new THREE.Quaternion();
+    const ft = new THREE.InstancedMesh(trunkGeo, new THREE.MeshStandardMaterial({ color: '#8f8272', roughness: 1 }), farPalms.length);
+    const ff = new THREE.InstancedMesh(frondGeo, new THREE.MeshStandardMaterial({ alphaTest: 0.5, side: THREE.DoubleSide, vertexColors: true, roughness: 0.8 }), farPalms.length);
+    ff.material.map = frondTexture(false);
+    farPalms.forEach(([x, z, h], i) => {
+      fq.setFromAxisAngle(Y, r() * Math.PI * 2);
+      fm.compose(new THREE.Vector3(x, 0, z), fq, new THREE.Vector3(h, h, h));
+      ft.setMatrixAt(i, fm); ff.setMatrixAt(i, fm);
+    });
+    addWind(ff.material, fxShared, 'frond');
+    scene.add(ft, ff);
+
+    // broadleaf trees: a trunk and a few lumpy canopy blobs, one draw call
+    const parts = [];
+    const trunk = new THREE.CylinderGeometry(0.25, 0.4, 5, 5); trunk.translate(0, 2.5, 0); parts.push(trunk);
+    for (const [x, y, z, s] of [[0, 7, 0, 3.4], [1.8, 6, 0.6, 2.5], [-1.6, 6.3, -0.4, 2.6], [0.3, 8.8, -0.2, 2.2]]) {
+      const b = new THREE.IcosahedronGeometry(s, 1);
+      const bp = b.attributes.position;
+      for (let i = 0; i < bp.count; i++) {
+        const X = bp.getX(i), Yv = bp.getY(i), Z = bp.getZ(i);
+        const k = 0.8 + 0.22 * Math.sin(X * 2.1 + Z * 1.3) * Math.sin(Yv * 2.7 + X) + 0.12 * Math.sin(X * 5.3 + Yv * 4.1 + Z * 3.7);
+        bp.setXYZ(i, X * k, Yv * k * 0.8, Z * k);
+      }
+      b.translate(x, y, z); parts.push(b);
+    }
+    // welded, so each canopy shades smoothly rather than in facets
+    const treeGeo = mergeVertices(mergeGeometries(parts.map((g) => { g.deleteAttribute('normal'); g.deleteAttribute('uv'); return g.index ? g.toNonIndexed() : g; })), 0.01);
+    treeGeo.computeVertexNormals();
+    const treeSpots = [];
+    for (let i = 0; i < (low ? 140 : 300); i++) {
+      const a = r() * Math.PI * 2, d = 150 + r() * 200;
+      treeSpots.push([Math.cos(a) * d, -60 + Math.sin(a) * d * 1.2, 0.8 + r() * 0.9]);
+    }
+    const trees = new THREE.InstancedMesh(treeGeo, new THREE.MeshStandardMaterial({ color: '#35502a', roughness: 0.95 }), treeSpots.length);
+    const tc = new THREE.Color();
+    treeSpots.forEach(([x, z, sc], i) => {
+      fq.setFromAxisAngle(Y, r() * Math.PI * 2);
+      fm.compose(new THREE.Vector3(x, 0, z), fq, new THREE.Vector3(sc, sc * (0.9 + r() * 0.4), sc));
+      trees.setMatrixAt(i, fm);
+      trees.setColorAt(i, tc.setRGB(0.75 + r() * 0.4, 0.8 + r() * 0.35, 0.7 + r() * 0.3));
+    });
+    scene.add(trees);
+
+    // hills: a ring of ridges ~700 m out, coloured by distance into the sky's haze
+    const seg = low ? 160 : 320, ring = [], hidx = [];
+    for (let i = 0; i <= seg; i++) {
+      const a = (i / seg) * Math.PI * 2;
+      const hgt = 18 + 26 * (0.5 + 0.5 * Math.sin(a * 3 + 1.1)) + 14 * Math.sin(a * 7.3 + 0.4) + 8 * Math.sin(a * 17.1 + 2.2) + 4 * Math.sin(a * 41 + 1.7);
+      const rad = 720 + 60 * Math.sin(a * 5 + 0.3);
+      const x = Math.cos(a) * rad, z = -60 + Math.sin(a) * rad;
+      ring.push(x, -2, z, x, Math.max(6, hgt), z);
+      if (i < seg) { const k = i * 2; hidx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); }
+    }
+    const hillGeo = new THREE.BufferGeometry();
+    hillGeo.setAttribute('position', new THREE.Float32BufferAttribute(ring, 3));
+    hillGeo.setIndex(hidx);
+    const hillMat = new THREE.ShaderMaterial({
+      side: THREE.DoubleSide, fog: false,
+      uniforms: { uHaze: { value: new THREE.Color('#c9d3dc') }, uLand: { value: new THREE.Color('#2e3d2a') }, uAmount: { value: 0.7 } },
+      vertexShader: /* glsl */`varying float vY; void main() { vY = position.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: /* glsl */`
+        uniform vec3 uHaze, uLand; uniform float uAmount; varying float vY;
+        void main() {
+          // thicker haze towards the foot of the hills, where the air is deeper
+          float a = clamp(uAmount + (1.0 - smoothstep(0.0, 60.0, vY)) * 0.2, 0.0, 1.0);
+          gl_FragColor = vec4(mix(uLand, uHaze, a), 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+    });
+    const hills = new THREE.Mesh(hillGeo, hillMat);
+    hills.renderOrder = -0.4;
+    hills.frustumCulled = false;
+    scene.add(hills);
+    horizonHaze.push(hillMat);
   }
 
   // Soft contact darkening under objects (grounds them without extra passes).
@@ -1263,10 +1423,14 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
   pmrem.dispose();
 
   /* ---------- post-processing ---------- */
-  const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: isWebGL2 ? (low ? 2 : 4) : 0 });
+  // Desktop renders the scene into ScenePass's own multisampled target, so the
+  // composer's buffers need no MSAA: every later full-screen pass would
+  // otherwise render into, and resolve, a 4x target for nothing.
+  const depthChain = !low && isWebGL2;
+  const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: isWebGL2 && !depthChain ? 2 : 0 });
   const composer = new EffectComposer(renderer, rt);
-  let scenePass = null, depthFx = null, dof = null, sunMask = null;
-  if (!low && isWebGL2) {
+  let scenePass = null, depthFx = null, dof = null, sunMask = null, taa = null;
+  if (depthChain) {
     // desktop: render into a target with depth, then ambient occlusion, light
     // shafts and depth of field read it
     scenePass = new ScenePass(scene, camera, 4);
@@ -1274,8 +1438,10 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
     sunMask.scene = scene;
     depthFx = new DepthFxPass(camera, scenePass, sunMask);
     dof = new DofPass(camera, scenePass);
+    taa = new TaaPass(camera, scenePass);
     composer.addPass(scenePass);
     composer.addPass(depthFx);
+    composer.addPass(taa);
     composer.addPass(dof);
   } else {
     composer.addPass(new RenderPass(scene, camera));
@@ -1298,7 +1464,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
   const lightDir = new THREE.Vector3();
   let envKey = '';
   const marbleBase = marble.color.clone(), marbleWarmBase = marbleWarm.color.clone();
-  let allowBloom = true, allowShadows = true;
+  let allowBloom = true, allowShadows = true, allowTaa = true;
 
   function applyMood(p) {
     const i = Math.min(moods.length - 2, Math.floor(p));
@@ -1356,6 +1522,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
       u.uAO.value = 0.55;
     }
     stars.visible = cur.stars > 0.01;
+    for (const m of horizonHaze) { m.uniforms.uHaze.value.copy(cur.fog); m.uniforms.uAmount.value = 0.55 + 0.25 * clamp01(cur.mist * 2); }
 
     const L = cur.lamps, F = cur.festive, H = Math.max(F, L * 0.5);
     const lampLevel = [L, L, H, L, L];
@@ -1451,13 +1618,18 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
     needsRender = true;
   }
 
-  // If frames are slow, give up effects one at a time, cheapest loss first.
+  // If frames are slow, give up effects one at a time, in order of what each
+  // costs against what it shows (measured on an Intel Iris Xe at 1440x900:
+  // grass ~16 ms, ambient occlusion ~17 ms, marble mirror ~18 ms; depth of
+  // field and TAA ~1-2 ms each).
   const debug = new URLSearchParams(location.search).has('debug');
   const ladder = [
-    function depthOfFieldOff() { if (!dof || !dof.enabled) return false; dof.enabled = false; return true; },
+    function grassOff() { if (!grass || !grass.mesh.visible) return false; grass.mesh.visible = false; return true; },
     function ambientOcclusionOff() { if (!depthFx || !depthFx.aoEnabled) return false; depthFx.aoEnabled = false; return true; },
-    function lightShaftsOff() { if (!depthFx || !depthFx.raysEnabled) return false; depthFx.raysEnabled = false; return true; },
     function reflectionsOff() { if (!reflector || !reflector.visible) return false; reflector.visible = false; return true; },
+    function lightShaftsOff() { if (!depthFx || !depthFx.raysEnabled) return false; depthFx.raysEnabled = false; return true; },
+    function depthOfFieldOff() { if (!dof || !dof.enabled) return false; dof.enabled = false; return true; },
+    function temporalAAOff() { if (!taa || !allowTaa) return false; allowTaa = false; taa.enabled = false; return true; },
     function pixelRatioDown() {
       const r = renderer.getPixelRatio();
       const next = [1.5, 1.25].find((v) => v < r - 0.01);
@@ -1473,9 +1645,13 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
     function bloomOff() { if (!allowBloom) return false; allowBloom = false; bloom.enabled = false; glowMat.uniforms.uGroups.value.multiplyScalar(1.6); return true; },
     function pixelRatio1() { if (renderer.getPixelRatio() <= 1.01) return false; renderer.setPixelRatio(1); resize(); return true; },
     function shadowsOff() { if (!allowShadows) return false; allowShadows = false; renderer.shadowMap.autoUpdate = false; return true; },
+    // last resort on weak GPUs: render fewer pixels and let the browser scale up
+    function renderScale80() { if (renderer.getPixelRatio() <= 0.81) return false; renderer.setPixelRatio(0.8); resize(); return true; },
+    function renderScale67() { if (renderer.getPixelRatio() <= 0.68) return false; renderer.setPixelRatio(0.67); resize(); return true; },
   ];
-  if (debug) window.__scene = { renderer, scene, camera, sun, bloom, composer, reflector, clouds, depthFx, dof, sunMask };
+  if (debug) window.__scene = { renderer, scene, camera, sun, bloom, composer, reflector, clouds, depthFx, dof, sunMask, taa, grass, setTaa: (v) => { allowTaa = v; } };
   const steps = [];
+  if (debug) window.__scene.adaptState = () => ({ steps: [...steps], median: +lastMedian.toFixed(1) });
   let lastMedian = 0;
   let overlay = null;
   if (debug) {
@@ -1490,7 +1666,7 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
   function updateOverlay() {
     if (!overlay) return;
     overlay.textContent = [
-      `tier ${quality}  webgl${isWebGL2 ? 2 : 1}  msaa ${rt.samples}`,
+      `tier ${quality}  webgl${isWebGL2 ? 2 : 1}  msaa ${scenePass ? scenePass.target.samples : rt.samples}`,
       `gpu ${gpu}`,
       `screen dpr ${window.devicePixelRatio}  render dpr ${renderer.getPixelRatio().toFixed(2)}`,
       `bloom ${bloom.enabled ? 'on' : 'off'}  shadows ${allowShadows ? sun.shadow.mapSize.x : 'off'}`,
@@ -1498,34 +1674,41 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
       `steps ${steps.length ? steps.join(', ') : 'none'}`,
     ].join('\n');
   }
-  // Judge only after start-up (shader compiles, texture uploads) has settled,
-  // and only step down after two slow windows in a row.
+  // Judge only after start-up (shader compiles, texture uploads) has settled.
+  // Frames are judged in one-second windows; mildly slow (over 28 ms) needs two
+  // windows in a row, very slow gives up several effects at once, so a weak
+  // GPU reaches a smooth setting in seconds rather than minutes.
   let frameTimes = [];
+  let windowTime = 0;
   let slowWindows = 0;
   const adaptFrom = performance.now() + 4000;
   const fixedQuality = debug && new URLSearchParams(location.search).has('fixed'); // measuring: no step-downs
   function adapt(dt) {
     if (fixedQuality || performance.now() < adaptFrom) return;
     frameTimes.push(dt);
-    if (frameTimes.length < 60) return;
+    windowTime += dt;
+    if (windowTime < 1 || frameTimes.length < 8) return;
     const sorted = [...frameTimes].sort((x, y) => x - y);
+    const median = sorted[sorted.length >> 1];
     frameTimes = [];
-    slowWindows = sorted[30] >= 0.028 ? slowWindows + 1 : 0;
-    lastMedian = sorted[30] * 1000;
+    windowTime = 0;
+    lastMedian = median * 1000;
     if (debug) console.info(`[scene] median frame ${lastMedian.toFixed(1)} ms`);
     updateOverlay();
-    if (slowWindows < 2) return;
+    if (median < 0.028) { slowWindows = 0; return; }
+    slowWindows++;
+    if (median < 0.045 && slowWindows < 2) return;
     slowWindows = 0;
-    while (ladder.length) {
+    let drops = median >= 0.07 ? 3 : median >= 0.045 ? 2 : 1;
+    while (drops > 0 && ladder.length) {
       const step = ladder.shift();
-      if (step()) {
-        steps.push(step.name);
-        if (step.name === 'pixelRatioDown' && renderer.getPixelRatio() > 1.26) ladder.unshift(step);
-        if (debug) console.info('[scene] quality step down:', step.name);
-        updateOverlay();
-        break;
-      }
+      if (!step()) continue;
+      steps.push(step.name);
+      if (step.name === 'pixelRatioDown' && renderer.getPixelRatio() > 1.26) ladder.unshift(step);
+      if (debug) console.info('[scene] quality step down:', step.name);
+      drops--;
     }
+    updateOverlay();
   }
 
   /* ---------- loop ---------- */
@@ -1544,10 +1727,16 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
   let time = 0;
   let last = performance.now();
   const right = new THREE.Vector3();
+  let lastYaw = null, yawRate = 0;
+  // ?debug&cam=x,y,z,lookX,lookY,lookZ pins the camera, for inspecting one spot
+  const debugCam = debug && params.get('cam') ? params.get('cam').split(',').map(Number) : null;
 
   function render() {
     grain.uniforms.uTime.value = time;
+    camera.updateMatrixWorld();
+    if (taa) taa.jitter();
     composer.render();
+    if (taa) taa.unjitter();
   }
 
   function frame(now) {
@@ -1564,15 +1753,30 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
     if (moving || !still || needsRender) {
       if (!still) time += dt;
       sampleCamera(p);
+      if (debugCam) { pos.set(debugCam[0], debugCam[1], debugCam[2]); look.set(debugCam[3], debugCam[4], debugCam[5]); }
+      let roll = 0;
       if (!still) {
         pointer.lerp(pointerTarget, 1 - Math.exp(-dt * 2.5));
-        pos.y += Math.sin(time * 0.35) * 0.05;
-        pos.x += Math.sin(time * 0.23) * 0.04;
+        // Handheld: a person carrying the camera. Layered slow sines (smooth,
+        // never repeating exactly) for breathing and small aim corrections...
+        const n = (a, b, c, o) => Math.sin(time * a + o) * 0.5 + Math.sin(time * b + o * 2.3) * 0.3 + Math.sin(time * c + o * 4.1) * 0.2;
+        pos.x += n(0.23, 0.61, 1.37, 0.0) * 0.045;
+        pos.y += n(0.31, 0.83, 1.91, 1.7) * 0.04;
         right.subVectors(look, pos).cross(Y).normalize();
-        look.addScaledVector(right, pointer.x * 1.2).addScaledVector(Y, -pointer.y * 0.8);
+        const reach = pos.distanceTo(look);
+        look.addScaledVector(right, n(0.17, 0.47, 1.13, 3.1) * reach * 0.004 + pointer.x * 1.2)
+          .addScaledVector(Y, n(0.19, 0.53, 1.29, 4.9) * reach * 0.003 - pointer.y * 0.8);
+        // ...and a lean into turns, like a camera operator banking round a corner.
+        const yaw = Math.atan2(look.x - pos.x, look.z - pos.z);
+        let dYaw = lastYaw === null ? 0 : yaw - lastYaw;
+        if (dYaw > Math.PI) dYaw -= Math.PI * 2; else if (dYaw < -Math.PI) dYaw += Math.PI * 2;
+        lastYaw = yaw;
+        yawRate += ((dt > 0 ? dYaw / dt : 0) - yawRate) * (1 - Math.exp(-dt * 3));
+        roll = THREE.MathUtils.clamp(-yawRate * 0.045, -0.035, 0.035) + n(0.29, 0.71, 1.53, 2.2) * 0.004;
       }
       camera.position.copy(pos);
       camera.lookAt(look);
+      if (roll) camera.rotateZ(roll);
       sky.position.copy(pos);
       nightDome.position.copy(pos);
       stars.position.copy(pos);
@@ -1586,6 +1790,8 @@ export async function createScene({ host, quality, reducedMotion, getProgress, h
       rainFx.update(camera.position, still ? 0 : cur.rain);
       poolFx.update(cur, lightDir, cur.sunColor, time);
       if (dof) dof.focus = pos.distanceTo(look);
+      if (grass) grass.update(camera.position);
+      if (taa) { const on = !still && allowTaa; if (on && !taa.enabled) taa.reset = true; taa.enabled = on; }
       render();
       spots.update(Math.round(p), host.clientWidth, host.clientHeight);
       lastP = p;

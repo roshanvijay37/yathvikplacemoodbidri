@@ -4,6 +4,7 @@
 //   DepthFxPass — ambient occlusion (half resolution, blurred) and volumetric
 //                light shafts (ray-marched against a sun-view depth map).
 //   DofPass    — gentle depth of field around the chapter's subject.
+//   TaaPass    — temporal anti-aliasing (sub-pixel jitter + reprojected history).
 // Kept apart from scene.js; they only need the renderer, scene and camera.
 
 import * as THREE from 'three';
@@ -315,5 +316,127 @@ export class DofPass extends Pass {
     u.uFocus.value = this.focus;
     renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
     this.quad.render(renderer);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+
+// Temporal anti-aliasing. Each frame the camera is nudged by a sub-pixel
+// amount (a Halton sequence); this pass blends the new frame with the previous
+// result, found again with the depth buffer and last frame's camera. Colours
+// are clamped to the new frame's 3x3 neighbourhood so moving things (fronds,
+// rain, flames) do not leave trails. Smooths thin-edge shimmer (fronds,
+// railings, specular sparkle) and the noise of the shadow and AO samples.
+const halton = (i, b) => { let f = 1, r = 0; while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); } return r; };
+const JITTER = Array.from({ length: 8 }, (_, i) => [halton(i + 1, 2) - 0.5, halton(i + 1, 3) - 0.5]);
+
+export class TaaPass extends Pass {
+  constructor(camera, scenePass) {
+    super();
+    this.camera = camera;
+    this.scenePass = scenePass;
+    this.needsSwap = true;
+    this.frame = 0;
+    this.reset = true;
+    this.width = 1; this.height = 1;
+    this.base = new THREE.Matrix4();      // projection without jitter
+    this.prevViewProj = new THREE.Matrix4();
+    const opts = { type: THREE.HalfFloatType, depthBuffer: false };
+    this.history = [new THREE.WebGLRenderTarget(1, 1, opts), new THREE.WebGLRenderTarget(1, 1, opts)];
+    this.resolve = new FullScreenQuad(new THREE.ShaderMaterial({
+      uniforms: {
+        tDiffuse: { value: null }, tHistory: { value: null }, tDepth: { value: null },
+        uProjInv: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() }, uPrevViewProj: { value: new THREE.Matrix4() },
+        uTexel: { value: new THREE.Vector2() }, uBlend: { value: 0.1 }, uReset: { value: 1 },
+      },
+      vertexShader: quadVertex,
+      fragmentShader: /* glsl */`
+        uniform sampler2D tDiffuse, tHistory, tDepth;
+        uniform mat4 uProjInv, uCamWorld, uPrevViewProj;
+        uniform vec2 uTexel; uniform float uBlend, uReset;
+        varying vec2 vUv;
+        vec3 toYCoCg(vec3 c) { return vec3(0.25 * c.r + 0.5 * c.g + 0.25 * c.b, 0.5 * c.r - 0.5 * c.b, -0.25 * c.r + 0.5 * c.g - 0.25 * c.b); }
+        vec3 toRGB(vec3 c) { return vec3(c.x + c.y - c.z, c.x + c.z, c.x - c.y - c.z); }
+        // HDR: weight by 1/(1+luma) so a bright lamp does not dominate the blend
+        vec3 tonemap(vec3 c) { return c / (1.0 + max(c.r, max(c.g, c.b))); }
+        vec3 untonemap(vec3 c) { return c / max(1.0 - max(c.r, max(c.g, c.b)), 1e-4); }
+        void main() {
+          vec3 cur = tonemap(textureLod(tDiffuse, vUv, 0.0).rgb);
+          vec3 lo = toYCoCg(cur), hi = lo, m1 = lo, m2 = lo * lo;
+          for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+            if (x == 0 && y == 0) continue;
+            vec3 s = toYCoCg(tonemap(textureLod(tDiffuse, vUv + vec2(x, y) * uTexel, 0.0).rgb));
+            lo = min(lo, s); hi = max(hi, s); m1 += s; m2 += s * s;
+          }
+          // variance clipping, tighter than the plain min/max box
+          m1 /= 9.0; m2 /= 9.0;
+          vec3 sd = sqrt(max(m2 - m1 * m1, 0.0));
+          lo = max(lo, m1 - 1.25 * sd); hi = min(hi, m1 + 1.25 * sd);
+
+          // where was this point last frame?
+          float d = textureLod(tDepth, vUv, 0.0).x;
+          vec4 v = uProjInv * vec4(vUv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+          v /= v.w;
+          vec4 prev = d >= 0.99999
+            ? uPrevViewProj * vec4(mat3(uCamWorld) * v.xyz, 0.0)   // sky: direction only
+            : uPrevViewProj * (uCamWorld * vec4(v.xyz, 1.0));
+          vec2 puv = prev.xy / prev.w * 0.5 + 0.5;
+
+          float a = uBlend;
+          if (uReset > 0.5 || prev.w <= 0.0 || any(lessThan(puv, vec2(0.0))) || any(greaterThan(puv, vec2(1.0)))) a = 1.0;
+          vec3 hist = toYCoCg(tonemap(textureLod(tHistory, puv, 0.0).rgb));
+          hist = toRGB(clamp(hist, lo, hi));
+          gl_FragColor = vec4(untonemap(mix(hist, cur, a)), 1.0);
+        }`,
+      depthTest: false, depthWrite: false,
+    }));
+    this.copy = new FullScreenQuad(new THREE.ShaderMaterial({
+      uniforms: { tDiffuse: { value: null } },
+      vertexShader: quadVertex,
+      fragmentShader: /* glsl */`uniform sampler2D tDiffuse; varying vec2 vUv; void main() { gl_FragColor = texture2D(tDiffuse, vUv); }`,
+      depthTest: false, depthWrite: false,
+    }));
+  }
+  setSize(w, h) {
+    this.width = w; this.height = h;
+    for (const t of this.history) t.setSize(w, h);
+    this.resolve.material.uniforms.uTexel.value.set(1 / w, 1 / h);
+    this.reset = true;
+  }
+  // Before rendering: remember the clean projection, then nudge it.
+  jitter() {
+    const cam = this.camera;
+    this.base.copy(cam.projectionMatrix);
+    if (!this.enabled) return;
+    const [jx, jy] = JITTER[this.frame % JITTER.length];
+    cam.projectionMatrix.elements[8] += (jx * 2) / this.width;
+    cam.projectionMatrix.elements[9] += (jy * 2) / this.height;
+    cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+  }
+  // After rendering: put the clean projection back and keep this frame's
+  // view-projection for next frame's reprojection.
+  unjitter() {
+    const cam = this.camera;
+    cam.projectionMatrix.copy(this.base);
+    cam.projectionMatrixInverse.copy(this.base).invert();
+    this.prevViewProj.multiplyMatrices(this.base, cam.matrixWorldInverse);
+    this.frame++;
+  }
+  render(renderer, writeBuffer, readBuffer) {
+    const u = this.resolve.material.uniforms, cam = this.camera;
+    const src = this.history[this.frame % 2], dst = this.history[(this.frame + 1) % 2];
+    u.tDiffuse.value = readBuffer.texture;
+    u.tHistory.value = src.texture;
+    u.tDepth.value = this.scenePass.depthTexture;
+    u.uProjInv.value.copy(this.base).invert();
+    u.uCamWorld.value.copy(cam.matrixWorld);
+    u.uPrevViewProj.value.copy(this.prevViewProj);
+    u.uReset.value = this.reset ? 1 : 0;
+    this.reset = false;
+    renderer.setRenderTarget(dst);
+    this.resolve.render(renderer);
+    this.copy.material.uniforms.tDiffuse.value = dst.texture;
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    this.copy.render(renderer);
   }
 }

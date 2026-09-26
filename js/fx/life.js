@@ -315,7 +315,7 @@ export function buildRain({ scene, shared, count }) {
 // (tall, many-wicked) on the stage and along the path to the hall.
 export function buildHallDecor({ scene, low, cx, cz, radius, tops, chandelier, marble, brass, addFlame, addGlow }) {
   const group = new THREE.Group();
-  const flower = new THREE.IcosahedronGeometry(0.05, low ? 0 : 1);
+  const flower = new THREE.IcosahedronGeometry(0.05, 0); // 5 cm: the finer version was 4x the triangles for nothing visible
   const marigold = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.85 });
   const tones = ['#f7a51c', '#f58f0f', '#ffc21a', '#e8700a', '#ffb000'].map((c) => new THREE.Color(c));
   const spots = [];

@@ -53,7 +53,8 @@ export const CAMERA_KEYS = [
 // rays — volumetric light shafts (desktop); rain — monsoon rain amount; wet —
 // wet stone (glossier, darker, stronger reflections).
 export const MOODS = [
-  { // 0 — arrival, early morning: low sun from the front-left, warm on the bronze
+  { // 0 — arrival, early morning: low sun ahead of the camera and to one side,
+    // so the gateway stays lit while light shafts pass through it
     skyElev: 5, skyAzim: 118, turbidity: 6, rayleigh: 2.4, mie: 0.006, mieG: 0.86,
     lightElev: 8, lightAzim: 118, sunColor: '#ffc690', sunIntensity: 3,
     hemiSky: '#f3dcc4', hemiGround: '#5c4533', hemiIntensity: 0.45,
