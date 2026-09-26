@@ -258,6 +258,22 @@ its stand-in stays. Phones download none of them. Credits in `models/README.md`.
   **Not checked:** any real phone, Safari/iOS (sound, tilt), a machine with a
   dedicated GPU.
 
+### Premium pass (27 Sep 2026)
+
+Opening mark-draw reveal; eye adaptation; light beams in the hall and bar;
+dust; birds at dawn and dusk; fireflies at night; rain puddles; lens flare at
+dawn (the sky's sun was moved into frame for it, the light on the gateway was
+not); pool refraction and caustics and a chair sheen (desktop).
+
+- Checked in Chrome on this laptop at 1440x900 (both versions) and 390x844,
+  with WebGL off (the reveal alone) and with reduced motion; no console
+  errors. Exposure measured: into the bar it rises over ~4 s, back into
+  daylight it settles in ~1.5 s.
+- Performance: on this Iris Xe the lighter version now settles at 60 fps with
+  glow **and sun shadows** off at 1440x900 (before this pass: glow only) — about
+  2 ms more at dawn, right on the 60 fps line. Phones render far fewer
+  pixels; **not measured on a real phone.**
+
 ### Showing the real place (waiting on Roshan)
 
 The 3D scene is an invented layout built from the logo. The biggest step

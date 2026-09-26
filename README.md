@@ -25,6 +25,7 @@ and hosting. Read it before changing anything on the site.
 | `js/fx/passes.js` | Desktop post-processing: ambient occlusion, dawn light shafts, depth of field, temporal anti-aliasing |
 | `js/fx/interaction.js` | Phone tilt to look around; the tap points in each chapter |
 | `js/fx/grass.js` | Blades of grass around the camera (desktop) |
+| `js/fx/atmos.js` | Light beams, dust, birds, fireflies, rain puddles |
 | `js/fx/shadows.js` | Contact-hardening sun shadows (desktop) |
 | `js/sound.js` | Ambient sound: the speaker button and the per-chapter mix |
 | `sounds/` | The five ambient loops; credits in `sounds/credits.html` (linked from the footer) and `sounds/README.md` |
@@ -123,7 +124,20 @@ Photos appear as a swipeable strip inside the chapter's panel, on top of the
   trees, and low wooded hills fading into the haze (generic Dakshina Kannada
   country, not the real skyline).
 - The camera moves like it is carried: slow breathing, small corrections, and
-  a lean into turns.
+  a lean into turns. Exposure adapts like eyes do: into the dark bar it starts
+  dim and opens up over a few seconds; back into daylight it briefly glares.
+- Opening: the bronze mark draws its outline and fills (CSS, behind the hero
+  text, so the text is never hidden) while the scene loads; the scene fades up
+  once the drawing is done.
+- Air: soft beams of light under the hall chandelier and the bar pendants,
+  dust in the hall's light (and in the dawn sun on desktop), a flock of birds
+  crossing the sky at dawn and dusk, fireflies over the lawn at night, rain
+  puddles with raindrop rings where the marble is wet. A lens flare (glare,
+  starburst, ghosts) when the sun is in frame at dawn, hidden when something
+  stands in front of it.
+- Water (desktop): the pool shows its floor through the surface, bent by the
+  ripples, with sunlight caustics moving on it. Scanned chairs have a soft
+  upholstery sheen.
 - Sound, off until the speaker button in the header is tapped (nothing
   downloads before that): birds at dawn, a dining room, rain and crickets in the
   evening, rain at the bar, nadaswaram and thavil in the hall. The mix follows
