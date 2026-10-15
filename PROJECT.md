@@ -7,15 +7,19 @@ The site built from it is described under "Current state".
 
 **Yathvik Place** has four parts under one roof:
 
-1. Multi-cuisine restaurant
-2. Modern stay rooms
-3. Bar
+1. **Yashodhe**, a pure veg restaurant ("Authentic Indian & International
+   Flavours", "By Yathvik Place"). It was listed as "multi-cuisine" until
+   15 Oct 2026; the official accounts say pure veg, so the site now does too.
+2. Modern stay rooms (the accounts call them "Premium Stays")
+3. Bar (the accounts say "Lounge & Bar")
 4. Function / banquet hall
 
-Not yet provided, and so must not be invented on any page: menu or cuisines,
+Tagline on the Facebook page: "Stay. Dine. Celebrate."
+
+Not yet provided, and so must not be invented on any page: menu or dishes,
 prices, opening hours, number or type of rooms, room amenities, hall capacity,
-parking, photos, social media accounts, email address, GST or licence details,
-and whether either phone number is on WhatsApp.
+parking, photos, GST or licence details, and whether either phone number is on
+WhatsApp.
 
 ## Contact
 
@@ -23,6 +27,16 @@ and whether either phone number is on WhatsApp.
 |---|---|
 | Phone 1 | +91 63646 26664 (`tel:+916364626664`) |
 | Phone 2 | +91 90086 26663 (`tel:+919008626663`) |
+| Email | info@yathvikplacemoodbidri.com (MX → Hostinger mail, checked 15 Oct 2026) |
+
+Official accounts, sent by Dhananjay Sakshathh on 9 Oct 2026 and checked live
+on 15 Oct 2026 (each bio links back to yathvikplacemoodbidri.com):
+
+| Account | Link |
+|---|---|
+| Instagram, Yathvik Place | https://www.instagram.com/yathvikplace/ |
+| Facebook page, Yathvik Place | https://www.facebook.com/profile.php?id=61595098535521 |
+| Instagram, Yashodhe (the veg restaurant) | https://www.instagram.com/yashodhe_veg/ |
 
 ## Address and location
 

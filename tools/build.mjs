@@ -27,7 +27,17 @@ function jsonLd() {
     logo: abs('brand/logo.svg'),
     image: [abs(c.site.shareImage), ...c.chapters.flatMap((ch) => ch.images.map((im) => abs(im.src)))],
     telephone: c.phones.map((p) => p.tel),
+    email: c.email,
+    sameAs: c.social.filter((s) => !s.href.includes('yashodhe')).map((s) => s.href),
     servesCuisine: c.site.servesCuisine,
+    department: {
+      '@type': 'Restaurant',
+      name: 'Yashodhe',
+      description: 'Pure veg restaurant at Yathvik Place: authentic Indian and international flavours.',
+      servesCuisine: c.site.servesCuisine,
+      sameAs: c.social.filter((s) => s.href.includes('yashodhe')).map((s) => s.href),
+      url: `${c.site.url}#restaurant`,
+    },
     address: {
       '@type': 'PostalAddress',
       streetAddress: a.street,

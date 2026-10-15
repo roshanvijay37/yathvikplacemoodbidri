@@ -50,8 +50,8 @@ engines, WhatsApp/Facebook link previews and visitors without JavaScript see.
 If it is skipped, the "Check generated files" action on GitHub turns red.
 
 Only publish facts recorded in `PROJECT.md`. Its "not yet provided" list
-(menu, prices, hours, room details, hall capacity, email, WhatsApp, social
-links) must not appear on the site until it has been supplied and written
+(menu, prices, hours, room details, hall capacity, WhatsApp)
+must not appear on the site until it has been supplied and written
 there.
 
 ## Analytics

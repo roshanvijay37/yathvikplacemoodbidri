@@ -40,6 +40,7 @@ function chapterSection(ch, i, c) {
         <p class="note">${esc(ch.note)}</p>
         <div class="actions">
           <a class="btn" href="tel:${esc(phone.tel)}" data-track="call" data-where="${esc(ch.id)}">${ICON_PHONE}${esc(ch.action)}</a>
+          ${(ch.links || []).map((l) => `<a class="btn btn-outline" href="${esc(l.href)}" target="_blank" rel="noopener" data-track="social" data-where="${esc(ch.id)}">${esc(l.label)}</a>`).join('')}
         </div>
       </article>
     </div>
@@ -57,6 +58,10 @@ function visitSection(c, stop) {
         <address><span translate="no">${esc(c.name)}</span><br>${c.address.lines.map(esc).join('<br>')}</address>
         <ul class="phones">
           ${c.phones.map((p) => `<li><a href="tel:${esc(p.tel)}" aria-label="${esc(v.callLabel)} ${esc(p.display)}" data-track="call" data-where="visit">${esc(p.display)}</a></li>`).join('')}
+        </ul>
+        <p class="email"><a href="mailto:${esc(c.email)}" data-track="email" data-where="visit">${esc(c.email)}</a></p>
+        <ul class="social">
+          ${c.social.map((s) => `<li><a href="${esc(s.href)}" target="_blank" rel="noopener" data-track="social" data-where="visit">${esc(s.label)} <span>${esc(s.handle)}</span></a></li>`).join('')}
         </ul>
         <div class="actions">
           <a class="btn" href="${esc(c.maps.link)}" target="_blank" rel="noopener" data-track="directions" data-where="visit">${ICON_PIN}${esc(v.directions)}</a>
@@ -98,6 +103,8 @@ export function footerHTML(c) {
     + `<p>${esc(c.footer.note)}</p>`
     + `<p>${esc(c.address.oneLine)}</p>`
     + `<p>${c.phones.map((p) => `<a href="tel:${esc(p.tel)}" data-track="call" data-where="footer">${esc(p.display)}</a>`).join(' · ')}</p>`
+    + `<p><a href="mailto:${esc(c.email)}" data-track="email" data-where="footer">${esc(c.email)}</a></p>`
+    + `<p>${c.social.map((s) => `<a href="${esc(s.href)}" target="_blank" rel="noopener" data-track="social" data-where="footer">${esc(s.label)}</a>`).join(' · ')}</p>`
     + `<p>© ${esc(c.footer.year)} <span translate="no">${esc(c.name)}</span> · <a class="foot-small" href="sounds/credits.html">Sound credits</a></p>`;
 }
 
