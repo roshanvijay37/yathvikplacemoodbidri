@@ -245,6 +245,60 @@ main { position: relative; z-index: 1; }
 .photos img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; scroll-snap-align: start; background: var(--sand); }
 .panel--night .photos img { background: #2a2018; }
 
+/* room types: a card per room, each opening its photos */
+.photos.rooms { grid-auto-columns: 64%; }
+.room-card {
+  position: relative; display: block; padding: 0; border: 0; background: var(--sand);
+  color: #fff; text-align: left; cursor: pointer; scroll-snap-align: start; touch-action: manipulation;
+  font: inherit; overflow: hidden;
+}
+.room-card img { width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; transition: transform .5s cubic-bezier(.2, .7, .2, 1); }
+.room-card::after { content: ''; position: absolute; inset: 40% 0 0; background: linear-gradient(to bottom, rgba(22, 17, 12, 0), rgba(22, 17, 12, .78)); pointer-events: none; }
+.room-card:hover img { transform: scale(1.04); }
+.room-name, .room-count { position: absolute; left: 12px; right: 12px; z-index: 1; }
+.room-name { bottom: 28px; font: 600 21px/1.1 var(--serif); }
+.room-count { bottom: 10px; font: 500 11px/1.2 var(--sans); letter-spacing: .16em; text-transform: uppercase; color: rgba(255, 255, 255, .85); }
+
+/* full-screen room photos */
+.gallery-open, .gallery-open body { overflow: hidden; }
+.gallery {
+  width: 100vw; max-width: none; height: 100vh; height: 100dvh; max-height: none;
+  margin: 0; padding: 0; border: 0; background: rgba(16, 12, 8, .97); color: var(--ivory);
+}
+.gallery[open] { display: flex; flex-direction: column; }
+.gallery::backdrop { background: rgba(16, 12, 8, .9); }
+.gallery-top {
+  display: flex; align-items: center; gap: 14px;
+  padding: calc(12px + env(safe-area-inset-top)) var(--gutter) 12px;
+}
+.gallery-top h2 { font: 600 24px/1.1 var(--serif); }
+.gallery-pos { font: 500 12px/1 var(--sans); letter-spacing: .16em; color: var(--muted-night); }
+.gallery-close {
+  margin-left: auto; width: 44px; height: 44px; padding: 0; border: 1px solid rgba(201, 154, 102, .45); border-radius: 50%;
+  background: none; color: inherit; font: 300 28px/1 var(--sans); cursor: pointer;
+}
+.gallery-track {
+  flex: 1; min-height: 0; display: flex; overflow-x: auto; scroll-snap-type: x mandatory;
+  overscroll-behavior: contain; scrollbar-width: none;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.gallery-track::-webkit-scrollbar { display: none; }
+.gallery-track:focus { outline: none; }
+.gallery-track figure {
+  flex: 0 0 100%; min-width: 0; margin: 0; scroll-snap-align: center; padding: 0 var(--gutter) 16px;
+  display: flex; align-items: center; justify-content: center;
+}
+.gallery-track img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
+.gallery-nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%;
+  background: rgba(22, 17, 12, .6); color: var(--ivory); font: 300 34px/1 var(--sans); cursor: pointer;
+}
+.gallery-prev { left: 12px; }
+.gallery-next { right: 12px; }
+.gallery.one .gallery-nav { display: none; }
+@media (hover: none) { .gallery-nav { display: none; } }
+
 /* hero */
 .chapter--hero .sticky { align-items: flex-end; }
 .chapter--hero .sticky::before {
@@ -416,6 +470,8 @@ body[data-mood="night"] .sound-toggle.is-on { color: var(--bronze-light); border
   .chapter--visit .sticky { justify-content: flex-end; }
   .panel { padding: 34px 32px 30px; }
   .photos { margin: 20px -32px 0; padding: 0 32px 4px; grid-auto-columns: 70%; }
+  .photos.rooms { grid-auto-columns: 52%; }
+  .gallery-track figure { padding: 0 88px 32px; }
   .panel--visit {
     max-width: 940px; max-height: none; overflow: visible;
     display: grid; grid-template-columns: 1fr 1.15fr; column-gap: 36px; align-items: start;

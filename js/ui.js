@@ -13,6 +13,16 @@ function photos(images) {
   ).join('')}</div>`;
 }
 
+// Room types: one card each; tapping opens that room's photos (see openGallery).
+function rooms(list) {
+  if (!list || !list.length) return '';
+  return `<div class="photos rooms">${list.map((r, i) =>
+    `<button type="button" class="room-card" data-room="${i}" aria-label="${esc(r.name)}: see ${r.images.length} photos">`
+    + `<img src="${esc(r.card)}" alt="" loading="lazy" decoding="async" width="720" height="480">`
+    + `<span class="room-name">${esc(r.name)}</span><span class="room-count">${r.images.length} photos</span></button>`
+  ).join('')}</div>`;
+}
+
 function heroSection(c) {
   return `
   <section class="chapter chapter--hero" id="arrival" data-stop="0" data-mood="day">
@@ -37,6 +47,7 @@ function chapterSection(ch, i, c) {
         <h2 id="${esc(ch.id)}-title">${esc(ch.title)}</h2>
         <p class="body">${esc(ch.body)}</p>
         ${photos(ch.images)}
+        ${rooms(ch.rooms)}
         <p class="note">${esc(ch.note)}</p>
         <div class="actions">
           <a class="btn" href="tel:${esc(phone.tel)}" data-track="call" data-where="${esc(ch.id)}">${ICON_PHONE}${esc(ch.action)}</a>
@@ -233,5 +244,73 @@ export function renderPage(c) {
   }, { rootMargin: '800px 0px' });
   io.observe(map);
 
+  setupGallery(main, c);
+
   return { progress, stops: sections.length };
+}
+
+// Full-screen photo viewer for a room type: swipe or arrow keys between
+// photos, Escape or the close button to leave. Built on <dialog>, so focus
+// stays inside it and the page behind cannot be tabbed into.
+function setupGallery(main, c) {
+  const list = c.chapters.flatMap((ch) => ch.rooms || []);
+  if (!list.length || typeof HTMLDialogElement !== 'function') return;
+  const dlg = document.createElement('dialog');
+  dlg.className = 'gallery';
+  dlg.setAttribute('aria-labelledby', 'gallery-title');
+  dlg.innerHTML = `
+    <div class="gallery-top"><h2 id="gallery-title"></h2><p class="gallery-pos" aria-live="polite"></p>
+      <button type="button" class="gallery-close" aria-label="Close photos">×</button></div>
+    <div class="gallery-track" tabindex="0"></div>
+    <button type="button" class="gallery-nav gallery-prev" aria-label="Previous photo">‹</button>
+    <button type="button" class="gallery-nav gallery-next" aria-label="Next photo">›</button>`;
+  document.body.appendChild(dlg);
+  const title = dlg.querySelector('h2');
+  const pos = dlg.querySelector('.gallery-pos');
+  const track = dlg.querySelector('.gallery-track');
+  let count = 0;
+  let cur = 0; // the photo shown, or being glided to by the arrows
+
+  const show = () => { pos.textContent = `${cur + 1} / ${count}`; };
+  const go = (d) => {
+    cur = Math.min(count - 1, Math.max(0, cur + d));
+    track.scrollTo({ left: cur * track.clientWidth, behavior: 'smooth' });
+    show();
+  };
+  // swipes: follow wherever the scroll comes to rest (a timer, as older
+  // Safari has no scrollend)
+  let settle;
+  track.addEventListener('scroll', () => {
+    clearTimeout(settle);
+    settle = setTimeout(() => { cur = Math.round(track.scrollLeft / Math.max(1, track.clientWidth)); show(); }, 140);
+  }, { passive: true });
+  dlg.querySelector('.gallery-prev').addEventListener('click', () => go(-1));
+  dlg.querySelector('.gallery-next').addEventListener('click', () => go(1));
+  dlg.querySelector('.gallery-close').addEventListener('click', () => dlg.close());
+  dlg.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight') { e.preventDefault(); go(1); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); }
+  });
+  dlg.addEventListener('close', () => {
+    document.documentElement.classList.remove('gallery-open');
+    track.innerHTML = '';
+  });
+
+  main.addEventListener('click', (e) => {
+    const btn = e.target.closest('.room-card');
+    if (!btn) return;
+    const r = list[Number(btn.dataset.room)];
+    count = r.images.length;
+    title.textContent = r.name;
+    track.innerHTML = r.images.map((im, i) =>
+      `<figure><img src="${esc(im.src)}" alt="${esc(im.alt || '')}" width="${im.width}" height="${im.height}" decoding="async"${i ? ' loading="lazy"' : ''}></figure>`
+    ).join('');
+    dlg.classList.toggle('one', count < 2);
+    document.documentElement.classList.add('gallery-open');
+    dlg.showModal();
+    track.scrollLeft = 0;
+    cur = 0;
+    show();
+    track.focus({ preventScroll: true });
+  });
 }

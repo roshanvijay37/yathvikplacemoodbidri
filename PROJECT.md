@@ -16,10 +16,16 @@ The site built from it is described under "Current state".
 
 Tagline on the Facebook page: "Stay. Dine. Celebrate."
 
+Room types (from the owner's Drive folder "YATHVIK PHOTOS",
+yathvikplacemarketing@gmail.com, 24 Oct 2026; one subfolder of professional
+photos per type): **Suite Room, Executive Room, Deluxe King Bed, Deluxe Three
+Bed**. Picked photos are on the site since 27 Oct 2026; the originals are in
+that folder.
+
 Not yet provided, and so must not be invented on any page: menu or dishes,
-prices, opening hours, number or type of rooms, room amenities, hall capacity,
-parking, photos, GST or licence details, and whether either phone number is on
-WhatsApp.
+prices, opening hours, number of rooms, room sizes or amenities, hall capacity,
+parking, photos of the restaurant, bar or hall, GST or licence details, and
+whether either phone number is on WhatsApp.
 
 ## Contact
 
@@ -187,8 +193,9 @@ from the logo mark, from dawn to night:
 
 - All copy uses only the facts above. Where details are missing the page says
   so and offers a call (e.g. "Call us to book a table or ask about the menu").
-- No photos yet. Each section has a slot in `images/` and an empty `images`
-  list in `content.js`; see `README.md` for how to add them.
+- Stay has real room photos (27 Oct 2026): one card per room type in
+  `content.js` `rooms`, each opening a full-screen gallery. The other sections
+  still have empty `images` lists; see `README.md` for how to add them.
 - Checked in desktop Chrome at 390×844 (phone emulation) and 1440×900, with
   WebGL disabled (CSS fallback) and with reduced motion. **Not yet tested on a
   real phone** — performance on low-end Android handsets is unverified.

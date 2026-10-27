@@ -84,6 +84,11 @@ happened (`header`, `callbar`, `restaurant`, `visit`, …).
 Photos appear as a swipeable strip inside the chapter's panel, on top of the
 3D scene. The 3D does not need to change.
 
+**Room types** (Stay) work differently: the chapter's `rooms` list has one
+entry per type — `name`, a `card` (the first photo at 720 px) and its
+`images` (1600 px). Each shows as a card; tapping it opens that room's photos
+full screen (`setupGallery` in `js/ui.js`). Photos are WebP, quality ~78.
+
 ## Adding a section or page
 
 - **A new chapter** (e.g. a gallery): add an entry to `chapters` in

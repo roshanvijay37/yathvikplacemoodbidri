@@ -98,10 +98,57 @@ export const content = {
       kicker: 'Into the evening',
       title: 'Modern stay rooms',
       body: 'Modern rooms to stay the night, whether you are travelling through Moodbidri, visiting family, or in town for a function.',
-      note: 'Room details and photos are coming to this page. Call us to check availability.',
+      note: 'Tap a room to see it. Call us for rates and availability.',
       action: 'Call to check availability',
       mood: 'day',
       images: [],
+      // Room types, named as in the owner's photo folders (Drive "YATHVIK
+      // PHOTOS", 24 Oct 2026). The first photo is the card; `card` is its
+      // small copy. No prices, sizes or amenities until they are provided.
+      rooms: [
+        {
+          name: 'Suite Room',
+          card: 'images/rooms/suite-01-card.webp',
+          images: [
+            { src: 'images/rooms/suite-01.webp', alt: 'Suite Room: king bed with towel swans under a panelled headboard wall', width: 1600, height: 1067 },
+            { src: 'images/rooms/suite-02.webp', alt: 'Suite Room: view from the entrance past the wardrobe to the bed and the windows', width: 1600, height: 1067 },
+            { src: 'images/rooms/suite-03.webp', alt: 'Suite Room: sitting area with a curved green sofa, an armchair and a chandelier', width: 1600, height: 1067 },
+            { src: 'images/rooms/suite-04.webp', alt: 'Suite Room: the bedroom seen through a sliding glass door', width: 1600, height: 1067 },
+            { src: 'images/rooms/suite-05.webp', alt: 'Suite Room: bathroom with a bathtub behind a glass partition', width: 1600, height: 1067 },
+          ],
+        },
+        {
+          name: 'Executive Room',
+          card: 'images/rooms/executive-01-card.webp',
+          images: [
+            { src: 'images/rooms/executive-01.webp', alt: 'Executive Room: double bed with an orange headboard, an armchair and a curtained window', width: 1600, height: 1067 },
+            { src: 'images/rooms/executive-02.webp', alt: 'Executive Room: the bed made up, with a fruit basket on the bedside table', width: 1600, height: 1067 },
+            { src: 'images/rooms/executive-03.webp', alt: 'Executive Room: welcome towels and red roses on the bed', width: 1600, height: 1067 },
+            { src: 'images/rooms/executive-04.webp', alt: 'Executive Room: bathroom with a lit oval mirror, a glass shower and marble walls', width: 1600, height: 1067 },
+          ],
+        },
+        {
+          name: 'Deluxe King Bed',
+          card: 'images/rooms/deluxe-king-01-card.webp',
+          images: [
+            { src: 'images/rooms/deluxe-king-01.webp', alt: 'Deluxe King Bed room: king bed, a desk and a large window onto the trees', width: 1600, height: 1067 },
+            { src: 'images/rooms/deluxe-king-02.webp', alt: 'Deluxe King Bed room: a lounge seat and an armchair by floor-to-ceiling glass', width: 1600, height: 1067 },
+            { src: 'images/rooms/deluxe-king-03.webp', alt: 'Deluxe King Bed room: the bed with towel swans', width: 1600, height: 1067 },
+            { src: 'images/rooms/deluxe-king-04.webp', alt: 'Deluxe King Bed room: wall-mounted TV, a cabinet and the bed', width: 1600, height: 1067 },
+          ],
+        },
+        {
+          name: 'Deluxe Three Bed',
+          card: 'images/rooms/deluxe-three-01-card.webp',
+          images: [
+            { src: 'images/rooms/deluxe-three-01.webp', alt: 'Deluxe Three Bed room: three single beds side by side', width: 1600, height: 1067 },
+            { src: 'images/rooms/deluxe-three-02.webp', alt: 'Deluxe Three Bed room: the beds, a desk and a mirror under a lit ceiling', width: 1600, height: 1067 },
+            { src: 'images/rooms/deluxe-three-03.webp', alt: 'Deluxe Three Bed room: beds made up with Yathvik Place towels', width: 1600, height: 1067 },
+            { src: 'images/rooms/deluxe-three-04.webp', alt: 'Deluxe Three Bed room: TV wall, wardrobe and desk', width: 1600, height: 1067 },
+            { src: 'images/rooms/deluxe-three-05.webp', alt: 'Deluxe Three Bed room: bathroom with a marble vanity and a lit mirror', width: 1600, height: 1067 },
+          ],
+        },
+      ],
     },
     {
       id: 'bar',

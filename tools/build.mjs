@@ -15,6 +15,8 @@ const check = process.argv.includes('--check');
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 const abs = (path) => new URL(path, c.site.url).href;
+// Every photo on the page: chapter strips plus each room type's photos.
+const allImages = () => c.chapters.flatMap((ch) => [...ch.images, ...(ch.rooms || []).flatMap((r) => r.images)].map((im) => im.src));
 
 function jsonLd() {
   const a = c.address;
@@ -25,7 +27,7 @@ function jsonLd() {
     description: c.site.shareDescription,
     url: c.site.url,
     logo: abs('brand/logo.svg'),
-    image: [abs(c.site.shareImage), ...c.chapters.flatMap((ch) => ch.images.map((im) => abs(im.src)))],
+    image: [abs(c.site.shareImage), ...allImages().map(abs)],
     telephone: c.phones.map((p) => p.tel),
     email: c.email,
     sameAs: c.social.filter((s) => !s.href.includes('yashodhe')).map((s) => s.href),
@@ -101,7 +103,7 @@ function fillRegions(html, regions) {
 }
 
 function sitemap() {
-  const images = [c.site.shareImage, ...c.chapters.flatMap((ch) => ch.images.map((im) => im.src))];
+  const images = [c.site.shareImage, ...allImages()];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
